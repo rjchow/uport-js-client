@@ -1,6 +1,8 @@
 const { decodeToken, createUnsignedToken, SECP256K1Client, TokenSigner } = require('jsontokens')
 const Transaction = require('ethereumjs-tx')
-const BN = require('ethereumjs-util').BN
+const util = require('ethereumjs-util')
+const BN = util.BN
+const txutils = require('eth-signer/dist/eth-signer-simple.js').txutils
 
 const getUrlParams = (url) => (
   url.match(/[^&?]*?=[^&?]*/g)
@@ -10,10 +12,23 @@ const getUrlParams = (url) => (
        return params
      }, {}))
 
+const  funcToData = (funcStr) => {
+  const name = funcStr.match(/.*\(/g)[0].slice(0, -1)
+  const [type, args] = funcStr.match(/\(.*\)/g)[0].slice(1, -1).split(',')
+                         .map((str) => str.trim().split(' '))
+                         .reduce((arrs, param) => {
+                           arrs[0].push(param[0])
+                           arrs[1].push(param[1])
+                           return arrs
+                         }, [[],[]])
+  return txutils._encodeFunctionTxData(name, type, args)
+}
+
 const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(key))
 const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((key) => credentials[key].map((cred) => cred.jwt)))
 
 // TODO List
+// Add challenge response, also allow deterministic challenges
 // add req token verification
 // have example initial states and have random generative ones
 // allow optional network requests -> which will post responses to callback instead of returning
@@ -25,7 +40,7 @@ const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((k
 // use internally for our library unit tests
 // create cl tool
 // networks? multi network mock?
-// pass in user actions into consumer if reponses differe debending on user action (like accept, reject request)
+// pass in user actions into consumer if reponses differ depending on user action (like accept, reject request)
 // other options to config init state, pass in array jwts etc.
 
 class UPortMockClient {
@@ -37,7 +52,7 @@ class UPortMockClient {
     // {key: value, ...}
     this.info  = initState.info || { name: 'John Ether'  }
     // this.credentials = {address: [{jwt: ..., json: ....}, ...], ...}
-    this.credentials = initiState.credentials || { phone: [{ jwt: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NksifQ.eyJzdWIiOiIweDExMjIzMyIsImNsYWltIjp7ImVtYWlsIjoiYmluZ2JhbmdidW5nQGVtYWlsLmNvbSJ9LCJleHAiOjE0ODUzMjExMzQ5OTYsImlzcyI6IjB4MDAxMTIyIiwiaWF0IjoxNDg1MzIxMTMzOTk2fQ.-mEzVMPYnzqFhOr0O7fs71-dWAacnllVyOdWQY0zh2ZdIt7-30IYTewds4tGlkLmMky-Y1ZjRmIsxmM7xvAgxg',
+    this.credentials = initState.credentials || { phone: [{ jwt: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NksifQ.eyJzdWIiOiIweDExMjIzMyIsImNsYWltIjp7ImVtYWlsIjoiYmluZ2JhbmdidW5nQGVtYWlsLmNvbSJ9LCJleHAiOjE0ODUzMjExMzQ5OTYsImlzcyI6IjB4MDAxMTIyIiwiaWF0IjoxNDg1MzIxMTMzOTk2fQ.-mEzVMPYnzqFhOr0O7fs71-dWAacnllVyOdWQY0zh2ZdIt7-30IYTewds4tGlkLmMky-Y1ZjRmIsxmM7xvAgxg',
                                     json: { "sub": '0x3b2631d8e15b145fd2bf99fc5f98346aecdc394c',
                                             "claim": { 'phone': '123-456-7891' },
                                             "exp": 1485321134996,
@@ -74,6 +89,7 @@ class UPortMockClient {
                       }, {})
         response = this.signer({...info, iss: this.address, iat: new Date().getTime(), verified})
         resolve(response)
+
       } else if (!!uri.match(/:me\?/g)) {
         // A simple request
         response = this.signer({iss: this.address, iat: new Date().getTime(), address: this.address})
@@ -82,15 +98,14 @@ class UPortMockClient {
       } else if (!!uri.match(/:0[xX][0-9a-fA-F]+\?/g)) {
         // Transaction signing request
         const to = uri.match(/0[xX][0-9a-fA-F]+/g)[0]
-        // TODO add funcToData
         const data = params.bytecode || funcToData(params.function)
         const nonce = this.nonce++
         const value = params.value
         const gas = params.gas ? params.gas : new BN('43092000') // TODO What to default?
         const gasPrice = new BN('20000000000')
-        const tx = new Transaction({to, value, data, gas, gasprice, nonce, data})
-        tx.sign(this.privateKey)
-        const txhash = util.bufferToHex(tx.hash(true))
+        const tx = new Transaction({to, value, data, gas, gasPrice, nonce, data})
+        tx.sign(new Buffer(this.privateKey, 'hex'))
+        const txHash = util.bufferToHex(tx.hash(true))
         resolve(txHash)
 
       } else if (!!uri.match(/add\?/g)) {
