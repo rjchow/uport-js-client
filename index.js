@@ -28,7 +28,7 @@ const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(k
 const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((key) => credentials[key].map((cred) => cred.jwt)))
 
 // TODO List
-// Add challenge response, also allow deterministic challenges
+// Add aud and type to responses
 // add req token verification
 // have example initial states and have random generative ones
 // allow optional network requests -> which will post responses to callback instead of returning
@@ -82,12 +82,14 @@ class UPortMockClient {
         // A shareReq in a token
         const token = decodeToken(params.requestToken).payload
         const verified = filterCredentials(this.credentials, intersection(this.credentials, token.requested) )
+        const req = params.requestToken
         const info = intersection(this.info, token.requested)
                      .reduce((infoReq, key) => {
                        infoReq[key] = this.info[key]
                        return infoReq
                       }, {})
-        response = this.signer({...info, iss: this.address, iat: new Date().getTime(), verified})
+        const payload = {...info, iss: this.address, iat: new Date().getTime(), verified, type: 'shareReq', req}
+        response = this.signer(payload)
         resolve(response)
 
       } else if (!!uri.match(/:me\?/g)) {
