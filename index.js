@@ -3,6 +3,7 @@ const Transaction = require('ethereumjs-tx')
 const util = require('ethereumjs-util')
 const BN = util.BN
 const txutils = require('eth-signer/dist/eth-signer-simple.js').txutils
+const EthJS = require('ethjs-query');
 
 const getUrlParams = (url) => (
   url.match(/[^&?]*?=[^&?]*/g)
@@ -27,22 +28,6 @@ const  funcToData = (funcStr) => {
 const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(key))
 const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((key) => credentials[key].map((cred) => cred.jwt)))
 
-// TODO List
-// Add aud and type to responses
-// add req token verification
-// have example initial states and have random generative ones
-// allow optional network requests -> which will post responses to callback instead of returning
-// eventually we should be able to allow all uport identity contracts and some initial contract state to be ...
-// ... quickly deployed on a test chain, and this can interact with that along with other useful ethereum test tooling
-// other mocked ipfs payloads
-// connections, other requests?
-// Test this against mobile input/output
-// use internally for our library unit tests
-// create cl tool
-// networks? multi network mock?
-// pass in user actions into consumer if reponses differ depending on user action (like accept, reject request)
-// other options to config init state, pass in array jwts etc.
-
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
     this.privateKey = config.privateKey || '278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f'
@@ -61,6 +46,8 @@ class UPortMockClient {
                                            }}]}
     const tokenSigner = new TokenSigner('ES256k', this.privateKey)
     this.signer = tokenSigner.sign.bind(tokenSigner)
+    this.provider = config.provider || null
+    this.ethjs = config.provider ? new EthJS(this.provider) : null;
   }
 
   sign(payload) {
@@ -100,15 +87,24 @@ class UPortMockClient {
       } else if (!!uri.match(/:0[xX][0-9a-fA-F]+\?/g)) {
         // Transaction signing request
         const to = uri.match(/0[xX][0-9a-fA-F]+/g)[0]
-        const data = params.bytecode || funcToData(params.function)
+        const data = params.bytecode || params.function ? funcToData(params.function) : '0x' //TODO whats the proper null value?
         const nonce = this.nonce++
         const value = params.value
         const gas = params.gas ? params.gas : new BN('43092000') // TODO What to default?
         const gasPrice = new BN('20000000000')
-        const tx = new Transaction({to, value, data, gas, gasPrice, nonce, data})
+        const txObj = {to, value, data, gas, gasPrice, nonce, data}
+        const tx = new Transaction(txObj)
         tx.sign(new Buffer(this.privateKey, 'hex'))
-        const txHash = util.bufferToHex(tx.hash(true))
-        resolve(txHash)
+
+        // If given provider send tx to network
+        if (this.ethjs) {
+          const rawTx = util.bufferToHex(tx.serialize())
+          console.log(rawTx)
+          this.ethjs.sendRawTransaction(rawTx).then(resolve, reject)
+        } else {
+          const txHash = util.bufferToHex(tx.hash(true))
+          resolve(txHash)
+        }
 
       } else if (!!uri.match(/add\?/g)) {
         // Add attestation request
