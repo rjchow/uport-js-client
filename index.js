@@ -4,6 +4,45 @@ const util = require('ethereumjs-util')
 const BN = util.BN
 const txutils = require('eth-signer/dist/eth-signer-simple.js').txutils
 const EthJS = require('ethjs-query');
+const HttpProvider = require('ethjs-provider-http');
+const UportLite = require('uport-lite')
+
+const verifyJWT = require('uport').verifyJWT
+
+// Some default configurations
+// Redundant code from uport-connect, can add addtional configs to uport-js instead ()
+const networks = {
+  'mainnet':   {  id: '0x1',
+                  registry: '0xab5c8051b9a1df1aab0149f8b0630848b7ecabf6',
+                  rpcUrl: 'https://mainnet.infura.io' },
+  'ropsten':   {  id: '0x3',
+                  registry: '0x41566e3a081f5032bdcad470adb797635ddfe1f0',
+                  rpcUrl: 'https://ropsten.infura.io' },
+  'kovan':     {  id: '0x2a',
+                  registry: '0x5f8e9351dc2d238fb878b6ae43aa740d62fc9758',
+                  rpcUrl: 'https://kovan.infura.io' },
+  'rinkeby':   {  id: '0x4',
+                  registry: '0x2cc31912b2b0f3075a87b3640923d45a26cef3ee',
+                  rpcUrl: 'https://rinkeby.infura.io' }
+}
+
+const DEFAULTNETWORK = 'rinkeby'
+
+const configNetwork = (net = DEFAULTNETWORK) => {
+  if (typeof net === 'object') {
+    ['id', 'registry', 'rpcUrl'].forEach((key) => {
+      if (!net.hasOwnProperty(key)) throw new Error(`Malformed network config object, object must have '${key}' key specified.`)
+    })
+    return net
+  } else if (typeof net === 'string') {
+    if (!networks[net]) throw new Error(`Network configuration not available for '${net}'`)
+    return networks[net]
+  }
+
+  throw new Error(`Network configuration object or network string required`)
+}
+
+
 
 const getUrlParams = (url) => (
   url.match(/[^&?]*?=[^&?]*/g)
@@ -28,12 +67,18 @@ const  funcToData = (funcStr) => {
 const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(key))
 const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((key) => credentials[key].map((cred) => cred.jwt)))
 
+
+// TODO what are the defaults here, maybe testRPC with not ipfs or infura ipfs ?, right now its rinkeby
+// how to add now network? Consider having some default wrappers that setup some useful configurations
+// Remove many of the conditionals and simply allow mock modules to turn actually client into test client
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
     this.privateKey = config.privateKey || '278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f'
     this.publicKey = SECP256K1Client.derivePublicKey(this.privateKey)
     this.address = config.address|| '0x3b2631d8e15b145fd2bf99fc5f98346aecdc394c'
     this.nonce = config.nonce || 0
+
+    // TODO move init state elsewhere
     // {key: value, ...}
     this.info  = initState.info || { name: 'John Ether'  }
     // this.credentials = {address: [{jwt: ..., json: ....}, ...], ...}
@@ -46,8 +91,27 @@ class UPortMockClient {
                                            }}]}
     const tokenSigner = new TokenSigner('ES256k', this.privateKey)
     this.signer = tokenSigner.sign.bind(tokenSigner)
-    this.provider = config.provider || null
-    this.ethjs = config.provider ? new EthJS(this.provider) : null;
+
+     this.network = config.network ? configNetwork(config.network) : null
+
+     if (this.network) {
+       // Eventually consume an ipfs api client or at least some wrapper that allows a mock to be passed in
+       this.ipfsUrl = config.ipfsConfig || 'https://ipfs.infura.io/ipfs/'
+       this.registryNetwork = {[this.network.id]: {registry: this.network.registry, rpcUrl: this.network.rpcUrl}}
+       const registry = config.registry || new UportLite({networks: this.registryNetwork, ipfsGw: this.ipfsUrl})
+      //  TODO change this in uport-js or in uport-lite, should not be necessary
+       this.registry = (address) => new Promise((resolve, reject) => {
+              registry(address, (error, profile) => {
+                if (error) return reject(error)
+                resolve(profile)
+              })
+            })
+
+      this.verifyJWT = (jwt) => verifyJWT({registry: this.registry}, jwt)
+
+      this.provider = config.provider || new HttpProvider(this.network.rpcUrl)
+      this.ethjs = config.provider ? new EthJS(this.provider) : null;
+    }
   }
 
   sign(payload) {
@@ -58,7 +122,7 @@ class UPortMockClient {
   addProfileKey(key, value ) {
     this.info[key] = value
   }
-
+  
   // consume(uri, actions)   actions = ['accept', 'cancel', etc], returns promise to allow for net req options
   consume(uri, actions) {
     return new Promise((resolve, reject) => {
@@ -77,6 +141,11 @@ class UPortMockClient {
                       }, {})
         const payload = {...info, iss: this.address, iat: new Date().getTime(), verified, type: 'shareReq', req}
         response = this.signer(payload)
+
+        if (this.network) {
+          this.verifyJWT(token).then(() => resolve(response)).catch(reject)
+        }
+
         resolve(response)
 
       } else if (!!uri.match(/:me\?/g)) {
@@ -113,9 +182,17 @@ class UPortMockClient {
         for (jwt in attestations) {
           const json = decodeToken(jwt).payload
           const key = Object.keys(json.claim)[0]
+
+          if (this.network) {
+            this.verifyJWT(jwt).then(() => {
+              this.credentials[key] ? this.credentials[key].append({jwt, json}) : this.credentials[key] = [{jwt, json}]
+            }).catch(reject)
+          }
+
+          // redundant
           this.credentials[key] ? this.credentials[key].append({jwt, json}) : this.credentials[key] = [{jwt, json}]
         }
-        // TODO what is the response here? is there one
+        // TODO what is the response here? is there one, add proper reject failure, or don't reject pass proper response
 
       } else {
         // Not a valid request
