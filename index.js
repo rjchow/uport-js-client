@@ -6,8 +6,8 @@ const txutils = require('eth-signer/dist/eth-signer-simple.js').txutils
 const EthJS = require('ethjs-query');
 const HttpProvider = require('ethjs-provider-http');
 const UportLite = require('uport-lite')
-
 const verifyJWT = require('uport').verifyJWT
+const nets = require('nets')
 
 // Some default configurations
 // Redundant code from uport-connect, can add addtional configs to uport-js instead ()
@@ -78,6 +78,9 @@ class UPortMockClient {
     this.address = config.address|| '0x3b2631d8e15b145fd2bf99fc5f98346aecdc394c'
     this.nonce = config.nonce || 0
 
+    // Handle this differently once there is a test and full client
+    this.postRes = config.postRes || false
+
     // TODO move init state elsewhere
     // {key: value, ...}
     this.info  = initState.info || { name: 'John Ether'  }
@@ -122,7 +125,24 @@ class UPortMockClient {
   addProfileKey(key, value ) {
     this.info[key] = value
   }
-  
+
+  returnResponse(res, url){
+    return new Promise((resolve, reject) => {
+      if (this.postRes) {
+        nets({
+          body: res,
+          url: url,
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        }, (err, resp, body) => {
+          if (err) reject(err)
+          resolve(res)
+        })
+      }
+      resolve(res)
+    })
+  }
+
   // consume(uri, actions)   actions = ['accept', 'cancel', etc], returns promise to allow for net req options
   consume(uri, actions) {
     return new Promise((resolve, reject) => {
@@ -146,12 +166,12 @@ class UPortMockClient {
           this.verifyJWT(token).then(() => resolve(response)).catch(reject)
         }
 
-        resolve(response)
+        this.returnResponse(response, token.callbackUrl).then(resolve, reject)
 
       } else if (!!uri.match(/:me\?/g)) {
         // A simple request
         response = this.signer({iss: this.address, iat: new Date().getTime(), address: this.address})
-        resolve(response)
+        this.returnResponse(txHash, params.callback_url).then(resolve, reject)
 
       } else if (!!uri.match(/:0[xX][0-9a-fA-F]+\?/g)) {
         // Transaction signing request
@@ -168,11 +188,11 @@ class UPortMockClient {
         // If given provider send tx to network
         if (this.ethjs) {
           const rawTx = util.bufferToHex(tx.serialize())
-          console.log(rawTx)
           this.ethjs.sendRawTransaction(rawTx).then(resolve, reject)
         } else {
           const txHash = util.bufferToHex(tx.hash(true))
           resolve(txHash)
+          this.returnResponse(txHash, params.callback_url).then(resolve, reject)
         }
 
       } else if (!!uri.match(/add\?/g)) {
