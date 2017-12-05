@@ -15,6 +15,9 @@ const base58 = require('bs58')
 const decodeEvent = require('ethjs-abi').decodeEvent
 const SecureRandom = require('secure-random')
 const IPFS = require('ipfs-mini');
+const EthSigner = require('eth-signer')
+const SimpleSigner = EthSigner.signers.SimpleSigner
+const IMProxySigner = EthSigner.signers.IMProxySigner
 
 const tryRequire = (path) => {
   try {
@@ -139,17 +142,28 @@ class UPortMockClient {
   initKeys() {
     this.deviceKeys = this.genKeyPair()
     this.recoveryKeys = this.genKeyPair()
-    this.initSigner()
+    this.initTokenSigner()
+    this.initSimpleSigner()
   }
 
-  initSigner() {
+  initTokenSigner() {
      const tokenSigner = new TokenSigner('ES256k', this.deviceKeys.priv)
      this.signer = tokenSigner.sign.bind(tokenSigner)
   }
 
+  initSimpleSigner() {
+     this.simpleSigner = new SimpleSigner({privateKey: this.deviceKeys.priv, publicKey: this.deviceKeys.pub, address: this.deviceKeys.address })
+     this.transactionSigner = this.simpleSigner  //TODO Make less confusing, uses simpler signer until identity created then uses identity specific signer
+  }
+
+  initTransactionSigner(IdentityManagerAdress) {
+     this.transactionSigner = new IMProxySigner(this.id, this.simpleSigner, IdentityManagerAdress)
+  }
+
   initializeIdentity(){
     if (!this.network) return Promise.reject(new Error('No network configured'))
-    const IdentityManager = Contract(IdentityManagerArtifact.abi).at(IdentityManagerArtifact.networks[this.network.id].address) // add config for this
+    const IdentityManagerAdress = IdentityManagerArtifact.networks[this.network.id].address
+    const IdentityManager = Contract(IdentityManagerArtifact.abi).at(IdentityManagerAdress) // add config for this
     const Registry = Contract(RegistryArtifact.abi).at(this.network.registry)
     if (!this.deviceKeys) this.initKeys()
     const uri = IdentityManager.createIdentity(this.deviceKeys.address, this.recoveryKeys.address)
@@ -160,6 +174,8 @@ class UPortMockClient {
               const log = receipt.logs[0]
               const createEventAbi = IdentityManager.abi.filter(obj => obj.type === 'event' && obj.name ==='LogIdentityCreated')[0]
               this.id = decodeEvent(createEventAbi, log.data, log.topics).identity
+              this.initTransactionSigner(IdentityManagerAdress)
+
               const publicProfile = {
                   '@context': 'http://schema.org',
                   '@type': 'Person',
@@ -172,7 +188,6 @@ class UPortMockClient {
                 })
               })
             }).then(hash => {
-              console.log(hash)
               const hexhash = new Buffer(base58.decode(hash)).toString('hex')
               // removes Qm from ipfs hash, which specifies length and hash
               const hashArg = `0x${hexhash.slice(4)}`
@@ -215,6 +230,7 @@ class UPortMockClient {
 
   // consume(uri, actions)   actions = ['accept', 'cancel', etc], returns promise to allow for net req options
   consume(uri, actions) {
+    // TODO clean up promis chains
     return new Promise((resolve, reject) => {
       const params = getUrlParams(uri)
       let response
@@ -255,18 +271,19 @@ class UPortMockClient {
         const gasPrice = 3000000
         const txObj = {to, value, data, gas, gasPrice, nonce, data, from}
         const tx = new Transaction(txObj)
-        // TODO add signer specific to our archetecture ie proxy
-        tx.sign(new Buffer(this.deviceKeys.priv.slice(2), 'hex'))
 
-        // If given provider send tx to network
-        if (this.ethjs) {
-          const rawTx = util.bufferToHex(tx.serialize())
-          return this.ethjs.sendRawTransaction(rawTx).then(txHash => this.returnResponse(txHash, params.callback_url)).then(resolve, reject)
-        } else {
-          const txHash = util.bufferToHex(tx.hash(true))
-          return this.returnResponse(txHash, params.callback_url)
-        }
+        const unsignedRawTx = util.bufferToHex(tx.serialize())
+        tx.sign(new Buffer(this.deviceKeys.priv.slice(2), 'hex')) // TODO remove redundant, get hash from above
 
+        this.transactionSigner.signRawTx(unsignedRawTx, (err, rawTx) => {
+          // If given provider send tx to network
+          if (this.ethjs) {
+            return this.ethjs.sendRawTransaction(rawTx).then(txHash => this.returnResponse(txHash, params.callback_url)).then(resolve, reject)
+          } else {
+            const txHash = util.bufferToHex(tx.hash(true))
+            return this.returnResponse(txHash, params.callback_url)
+          }
+        })
       } else if (!!uri.match(/add\?/g)) {
         // Add attestation request
         const attestations = params.attestations.isArray() ? params.attestations : [params.attestations]
