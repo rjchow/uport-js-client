@@ -101,11 +101,14 @@ class UPortMockClient {
                                             "iat": 1485321133996
                                            }}]}
 
-     this.network = config.network ? configNetwork(config.network) : null
+     this.network = config.network ? configNetwork(config.network) : null  // have some default connect/setup testrpc
 
      if (this.network) {
        // Eventually consume an ipfs api client or at least some wrapper that allows a mock to be passed in
        this.ipfsUrl = config.ipfsConfig || 'https://ipfs.infura.io/ipfs/'
+       // ^ TODO better ipfs config, pass in opts after or url above
+       this.ipfs = new IPFS({ host: 'ipfs.infura.io', port: 5001, protocol: 'https' })
+
        this.registryNetwork = {[this.network.id]: {registry: this.network.registry, rpcUrl: this.network.rpcUrl}}
        const registry = config.registry || new UportLite({networks: this.registryNetwork, ipfsGw: this.ipfsUrl})
       //  TODO change this in uport-js or in uport-lite, should not be necessary
