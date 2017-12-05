@@ -60,7 +60,6 @@ const configNetwork = (net = DEFAULTNETWORK) => {
   throw new Error(`Network configuration object or network string required`)
 }
 
-
 const getUrlParams = (url) => (
   url.match(/[^&?]*?=[^&?]*/g)
      .map((param) => param.split('='))
@@ -84,10 +83,6 @@ const  funcToData = (funcStr) => {
 const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(key))
 const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((key) => credentials[key].map((cred) => cred.jwt)))
 
-
-// TODO what are the defaults here, maybe testRPC with not ipfs or infura ipfs ?, right now its rinkeby
-// how to add now network? Consider having some default wrappers that setup some useful configurations
-// Remove many of the conditionals and simply allow mock modules to turn actually client into test client
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
     this.privateKey = config.privateKey || '278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f'
@@ -132,6 +127,16 @@ class UPortMockClient {
       this.provider = config.provider || new HttpProvider(this.network.rpcUrl)
       this.ethjs = config.provider ? new EthJS(this.provider) : null;
     }
+  }
+
+  genKeyPair() {
+      const privKey = SecureRandom.randomBuffer(32)
+      const pubKey = ethutil.privateToPublic(privKey)
+      return {
+        priv: `0x${privKey.toString('hex')}`,
+        pub: `0x04${pubKey.toString('hex')}`,
+        address: `0x${ethutil.pubToAddress(pubKey).toString('hex')}`
+      }
   }
 
   sign(payload) {
