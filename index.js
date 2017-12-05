@@ -1,3 +1,4 @@
+// Normalize library use, which dependencies/utils do we prefer
 const { decodeToken, createUnsignedToken, SECP256K1Client, TokenSigner } = require('jsontokens')
 const Transaction = require('ethereumjs-tx')
 const util = require('ethereumjs-util')
@@ -6,8 +7,14 @@ const txutils = require('eth-signer/dist/eth-signer-simple.js').txutils
 const EthJS = require('ethjs-query');
 const HttpProvider = require('ethjs-provider-http');
 const UportLite = require('uport-lite')
-const verifyJWT = require('uport').verifyJWT
+const verifyJWT = require('uport').JWT.verifyJWT
 const nets = require('nets')
+const Contract = require('uport').Contract
+const ethutil = require('ethereumjs-util')
+const base58 = require('bs58')
+const decodeEvent = require('ethjs-abi').decodeEvent
+const SecureRandom = require('secure-random')
+const IPFS = require('ipfs-mini');
 
 const tryRequire = (path) => {
   try {
