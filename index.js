@@ -100,8 +100,6 @@ class UPortMockClient {
                                             "iss": '0x5b0abbd37bcebb98a390445b540115f3c819a3b9',
                                             "iat": 1485321133996
                                            }}]}
-    const tokenSigner = new TokenSigner('ES256k', this.privateKey)
-    this.signer = tokenSigner.sign.bind(tokenSigner)
 
      this.network = config.network ? configNetwork(config.network) : null
 
@@ -138,6 +136,12 @@ class UPortMockClient {
   initKeys() {
     this.deviceKeys = this.genKeyPair()
     this.recoveryKeys = this.genKeyPair()
+    this.initSigner()
+  }
+
+  initSigner() {
+     const tokenSigner = new TokenSigner('ES256k', this.deviceKeys.priv)
+     this.signer = tokenSigner.sign.bind(tokenSigner)
   }
 
   sign(payload) {
