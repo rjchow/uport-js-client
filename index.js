@@ -85,11 +85,7 @@ const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((k
 
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
-    this.privateKey = config.privateKey || '278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f'
-    this.publicKey = SECP256K1Client.derivePublicKey(this.privateKey)
-    this.address = config.address|| '0x3b2631d8e15b145fd2bf99fc5f98346aecdc394c'
     this.nonce = config.nonce || 0
-
     // Handle this differently once there is a test and full client
     this.postRes = config.postRes || false
 
@@ -137,6 +133,11 @@ class UPortMockClient {
         pub: `0x04${pubKey.toString('hex')}`,
         address: `0x${ethutil.pubToAddress(pubKey).toString('hex')}`
       }
+  }
+
+  initKeys() {
+    this.deviceKeys = this.genKeyPair()
+    this.recoveryKeys = this.genKeyPair()
   }
 
   sign(payload) {
