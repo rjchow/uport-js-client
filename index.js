@@ -147,6 +147,20 @@ class UPortMockClient {
      this.signer = tokenSigner.sign.bind(tokenSigner)
   }
 
+  initializeIdentity(){
+    if (!this.network) return Promise.reject(new Error('No network configured'))
+    const IdentityManager = Contract(IdentityManagerArtifact.abi).at(IdentityManagerArtifact.networks[this.network.id].address) // add config for this
+    const Registry = Contract(RegistryArtifact.abi).at(this.network.registry)
+    if (!this.deviceKeys) this.initKeys()
+    const uri = IdentityManager.createIdentity(this.deviceKeys.address, this.recoveryKeys.address)
+
+    return this.consume(uri)
+            .then(this.ethjs.getTransactionReceipt.bind(this.ethjs))
+            .then(receipt => {
+              // ...
+            })
+  }
+
   sign(payload) {
     const hash = SECP256K1Client.createHash(payload)
     return SECP256K1Client.signHash(hash, this.privateKey)
