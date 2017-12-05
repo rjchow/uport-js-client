@@ -1,3 +1,4 @@
+// Normalize library use, which dependencies/utils do we prefer
 const { decodeToken, createUnsignedToken, SECP256K1Client, TokenSigner } = require('jsontokens')
 const Transaction = require('ethereumjs-tx')
 const util = require('ethereumjs-util')
@@ -6,11 +7,26 @@ const txutils = require('eth-signer/dist/eth-signer-simple.js').txutils
 const EthJS = require('ethjs-query');
 const HttpProvider = require('ethjs-provider-http');
 const UportLite = require('uport-lite')
-const verifyJWT = require('uport').verifyJWT
+const verifyJWT = require('uport').JWT.verifyJWT
 const nets = require('nets')
+const Contract = require('uport').Contract
+const ethutil = require('ethereumjs-util')
+const base58 = require('bs58')
+const decodeEvent = require('ethjs-abi').decodeEvent
+const SecureRandom = require('secure-random')
+const IPFS = require('ipfs-mini');
 
-// Some default configurations
-// Redundant code from uport-connect, can add addtional configs to uport-js instead ()
+const tryRequire = (path) => {
+  try {
+    return require(path)
+  } catch(err) {
+    return null
+  }
+}
+
+const IdentityManagerArtifact = tryRequire('./contracts/IdentityManager.json')
+const RegistryArtifact = tryRequire('./contracts/UportRegistry.json')
+
 const networks = {
   'mainnet':   {  id: '0x1',
                   registry: '0xab5c8051b9a1df1aab0149f8b0630848b7ecabf6',
@@ -30,9 +46,11 @@ const DEFAULTNETWORK = 'rinkeby'
 
 const configNetwork = (net = DEFAULTNETWORK) => {
   if (typeof net === 'object') {
-    ['id', 'registry', 'rpcUrl'].forEach((key) => {
+    ['id', 'rpcUrl'].forEach((key) => {
       if (!net.hasOwnProperty(key)) throw new Error(`Malformed network config object, object must have '${key}' key specified.`)
     })
+    if (!net.registry && RegistryArtifact.networks[net.id])  net.registry = RegistryArtifact.networks[net.id].address
+    if (!net.registry) throw new Error(`Malformed network config object, no registry specified and no registry available in registry contract artifact`)
     return net
   } else if (typeof net === 'string') {
     if (!networks[net]) throw new Error(`Network configuration not available for '${net}'`)
@@ -41,8 +59,6 @@ const configNetwork = (net = DEFAULTNETWORK) => {
 
   throw new Error(`Network configuration object or network string required`)
 }
-
-
 
 const getUrlParams = (url) => (
   url.match(/[^&?]*?=[^&?]*/g)
@@ -61,23 +77,15 @@ const  funcToData = (funcStr) => {
                            arrs[1].push(param[1])
                            return arrs
                          }, [[],[]])
-  return txutils._encodeFunctionTxData(name, type, args)
+  return `0x${txutils._encodeFunctionTxData(name, type, args)}`
 }
 
 const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(key))
 const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((key) => credentials[key].map((cred) => cred.jwt)))
 
-
-// TODO what are the defaults here, maybe testRPC with not ipfs or infura ipfs ?, right now its rinkeby
-// how to add now network? Consider having some default wrappers that setup some useful configurations
-// Remove many of the conditionals and simply allow mock modules to turn actually client into test client
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
-    this.privateKey = config.privateKey || '278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f'
-    this.publicKey = SECP256K1Client.derivePublicKey(this.privateKey)
-    this.address = config.address|| '0x3b2631d8e15b145fd2bf99fc5f98346aecdc394c'
     this.nonce = config.nonce || 0
-
     // Handle this differently once there is a test and full client
     this.postRes = config.postRes || false
 
@@ -92,14 +100,15 @@ class UPortMockClient {
                                             "iss": '0x5b0abbd37bcebb98a390445b540115f3c819a3b9',
                                             "iat": 1485321133996
                                            }}]}
-    const tokenSigner = new TokenSigner('ES256k', this.privateKey)
-    this.signer = tokenSigner.sign.bind(tokenSigner)
 
-     this.network = config.network ? configNetwork(config.network) : null
+     this.network = config.network ? configNetwork(config.network) : null  // have some default connect/setup testrpc
 
      if (this.network) {
        // Eventually consume an ipfs api client or at least some wrapper that allows a mock to be passed in
        this.ipfsUrl = config.ipfsConfig || 'https://ipfs.infura.io/ipfs/'
+       // ^ TODO better ipfs config, pass in opts after or url above
+       this.ipfs = new IPFS({ host: 'ipfs.infura.io', port: 5001, protocol: 'https' })
+
        this.registryNetwork = {[this.network.id]: {registry: this.network.registry, rpcUrl: this.network.rpcUrl}}
        const registry = config.registry || new UportLite({networks: this.registryNetwork, ipfsGw: this.ipfsUrl})
       //  TODO change this in uport-js or in uport-lite, should not be necessary
@@ -115,6 +124,67 @@ class UPortMockClient {
       this.provider = config.provider || new HttpProvider(this.network.rpcUrl)
       this.ethjs = config.provider ? new EthJS(this.provider) : null;
     }
+  }
+
+  genKeyPair() {
+      const privKey = SecureRandom.randomBuffer(32)
+      const pubKey = ethutil.privateToPublic(privKey)
+      return {
+        priv: `0x${privKey.toString('hex')}`,
+        pub: `0x04${pubKey.toString('hex')}`,
+        address: `0x${ethutil.pubToAddress(pubKey).toString('hex')}`
+      }
+  }
+
+  initKeys() {
+    this.deviceKeys = this.genKeyPair()
+    this.recoveryKeys = this.genKeyPair()
+    this.initSigner()
+  }
+
+  initSigner() {
+     const tokenSigner = new TokenSigner('ES256k', this.deviceKeys.priv)
+     this.signer = tokenSigner.sign.bind(tokenSigner)
+  }
+
+  initializeIdentity(){
+    if (!this.network) return Promise.reject(new Error('No network configured'))
+    const IdentityManager = Contract(IdentityManagerArtifact.abi).at(IdentityManagerArtifact.networks[this.network.id].address) // add config for this
+    const Registry = Contract(RegistryArtifact.abi).at(this.network.registry)
+    if (!this.deviceKeys) this.initKeys()
+    const uri = IdentityManager.createIdentity(this.deviceKeys.address, this.recoveryKeys.address)
+
+    return this.consume(uri)
+            .then(this.ethjs.getTransactionReceipt.bind(this.ethjs))
+            .then(receipt => {
+              const log = receipt.logs[0]
+              const createEventAbi = IdentityManager.abi.filter(obj => obj.type === 'event' && obj.name ==='LogIdentityCreated')[0]
+              this.id = decodeEvent(createEventAbi, log.data, log.topics).identity
+              const publicProfile = {
+                  '@context': 'http://schema.org',
+                  '@type': 'Person',
+                  "publicKey": this.deviceKeys.pub
+              }
+              return new Promise((resolve, reject) => {
+                this.ipfs.addJSON(publicProfile, (err, result) => {
+                    if (err) reject(new Error(err))
+                    resolve(result)
+                })
+              })
+            }).then(hash => {
+              console.log(hash)
+              const hexhash = new Buffer(base58.decode(hash)).toString('hex')
+              // removes Qm from ipfs hash, which specifies length and hash
+              const hashArg = `0x${hexhash.slice(4)}`
+              const key = 'uPortProfileIPFS1220'
+              return Registry.set(key, this.id, hexhash)
+            })
+            .then(this.consume.bind(this))
+            .then(this.ethjs.getTransactionReceipt.bind(this.ethjs))
+            .then(receipt => {
+              // .. receipt
+              return
+            })
   }
 
   sign(payload) {
@@ -163,36 +233,38 @@ class UPortMockClient {
         response = this.signer(payload)
 
         if (this.network) {
-          this.verifyJWT(token).then(() => resolve(response)).catch(reject)
+          return this.verifyJWT(params.requestToken).then(() => this.returnResponse(response, token.callbackUrl))
         }
 
-        this.returnResponse(response, token.callbackUrl).then(resolve, reject)
+        return this.returnResponse(response, token.callbackUrl)
 
       } else if (!!uri.match(/:me\?/g)) {
         // A simple request
         response = this.signer({iss: this.address, iat: new Date().getTime(), address: this.address})
-        this.returnResponse(txHash, params.callback_url).then(resolve, reject)
+        return this.returnResponse(txHash, params.callback_url)
 
       } else if (!!uri.match(/:0[xX][0-9a-fA-F]+\?/g)) {
         // Transaction signing request
         const to = uri.match(/0[xX][0-9a-fA-F]+/g)[0]
-        const data = params.bytecode || params.function ? funcToData(params.function) : '0x' //TODO whats the proper null value?
+        const from = this.deviceKeys.address
+        const data = params.bytecode || params.function ?  funcToData(params.function) : '0x' //TODO whats the proper null value?
         const nonce = this.nonce++
-        const value = params.value
-        const gas = params.gas ? params.gas : new BN('43092000') // TODO What to default?
-        const gasPrice = new BN('20000000000')
-        const txObj = {to, value, data, gas, gasPrice, nonce, data}
+        const value = params.value || 0
+        const gas = params.gas ? params.gas : 6000000
+        // TODO good default or opts
+        const gasPrice = 3000000
+        const txObj = {to, value, data, gas, gasPrice, nonce, data, from}
         const tx = new Transaction(txObj)
-        tx.sign(new Buffer(this.privateKey, 'hex'))
+        // TODO add signer specific to our archetecture ie proxy
+        tx.sign(new Buffer(this.deviceKeys.priv.slice(2), 'hex'))
 
         // If given provider send tx to network
         if (this.ethjs) {
           const rawTx = util.bufferToHex(tx.serialize())
-          this.ethjs.sendRawTransaction(rawTx).then(resolve, reject)
+          return this.ethjs.sendRawTransaction(rawTx).then(txHash => this.returnResponse(txHash, params.callback_url)).then(resolve, reject)
         } else {
           const txHash = util.bufferToHex(tx.hash(true))
-          resolve(txHash)
-          this.returnResponse(txHash, params.callback_url).then(resolve, reject)
+          return this.returnResponse(txHash, params.callback_url)
         }
 
       } else if (!!uri.match(/add\?/g)) {
@@ -212,12 +284,11 @@ class UPortMockClient {
           // redundant
           this.credentials[key] ? this.credentials[key].append({jwt, json}) : this.credentials[key] = [{jwt, json}]
         }
-        // TODO what is the response here? is there one, add proper reject failure, or don't reject pass proper response
-
+        // TODO standard response?
       } else {
         // Not a valid request
         reject(new Error('Invalid URI Passed'))
-        //TODO  what is our error returns from mobile? do we do anything? if not this should maybe throw instead of return error?
+        //TODO  standard response?
       }
     })
   }
