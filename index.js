@@ -46,9 +46,11 @@ const DEFAULTNETWORK = 'rinkeby'
 
 const configNetwork = (net = DEFAULTNETWORK) => {
   if (typeof net === 'object') {
-    ['id', 'registry', 'rpcUrl'].forEach((key) => {
+    ['id', 'rpcUrl'].forEach((key) => {
       if (!net.hasOwnProperty(key)) throw new Error(`Malformed network config object, object must have '${key}' key specified.`)
     })
+    if (!net.registry && RegistryArtifact.networks[net.id])  net.registry = RegistryArtifact.networks[net.id].address
+    if (!net.registry) throw new Error(`Malformed network config object, no registry specified and no registry available in registry contract artifact`)
     return net
   } else if (typeof net === 'string') {
     if (!networks[net]) throw new Error(`Network configuration not available for '${net}'`)
@@ -57,7 +59,6 @@ const configNetwork = (net = DEFAULTNETWORK) => {
 
   throw new Error(`Network configuration object or network string required`)
 }
-
 
 
 const getUrlParams = (url) => (
