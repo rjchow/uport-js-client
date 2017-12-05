@@ -77,7 +77,7 @@ const  funcToData = (funcStr) => {
                            arrs[1].push(param[1])
                            return arrs
                          }, [[],[]])
-  return txutils._encodeFunctionTxData(name, type, args)
+  return `0x${txutils._encodeFunctionTxData(name, type, args)}`
 }
 
 const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(key))
