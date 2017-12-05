@@ -130,12 +130,12 @@ class UPortMockClient {
   }
 
   genKeyPair() {
-      const privKey = SecureRandom.randomBuffer(32)
-      const pubKey = ethutil.privateToPublic(privKey)
+      const privateKey = SecureRandom.randomBuffer(32)
+      const publicKey = ethutil.privateToPublic(privateKey)
       return {
-        priv: `0x${privKey.toString('hex')}`,
-        pub: `0x04${pubKey.toString('hex')}`,
-        address: `0x${ethutil.pubToAddress(pubKey).toString('hex')}`
+        privateKey: `0x${privateKey.toString('hex')}`,
+        publicKey: `0x04${publicKey.toString('hex')}`,
+        address: `0x${ethutil.pubToAddress(publicKey).toString('hex')}`
       }
   }
 
@@ -147,12 +147,12 @@ class UPortMockClient {
   }
 
   initTokenSigner() {
-     const tokenSigner = new TokenSigner('ES256k', this.deviceKeys.priv)
+     const tokenSigner = new TokenSigner('ES256k', this.deviceKeys.privateKey)
      this.signer = tokenSigner.sign.bind(tokenSigner)
   }
 
   initSimpleSigner() {
-     this.simpleSigner = new SimpleSigner({privateKey: this.deviceKeys.priv, publicKey: this.deviceKeys.pub, address: this.deviceKeys.address })
+     this.simpleSigner = new SimpleSigner({privateKey: this.deviceKeys.privateKey, publicKey: this.deviceKeys.publicKey, address: this.deviceKeys.address })
      this.transactionSigner = this.simpleSigner  //TODO Make less confusing, uses simpler signer until identity created then uses identity specific signer
   }
 
@@ -179,7 +179,7 @@ class UPortMockClient {
               const publicProfile = {
                   '@context': 'http://schema.org',
                   '@type': 'Person',
-                  "publicKey": this.deviceKeys.pub
+                  "publicKey": this.deviceKeys.publicKey
               }
               return new Promise((resolve, reject) => {
                 this.ipfs.addJSON(publicProfile, (err, result) => {
@@ -273,7 +273,7 @@ class UPortMockClient {
         const tx = new Transaction(txObj)
 
         const unsignedRawTx = util.bufferToHex(tx.serialize())
-        tx.sign(new Buffer(this.deviceKeys.priv.slice(2), 'hex')) // TODO remove redundant, get hash from above
+        tx.sign(new Buffer(this.deviceKeys.privateKey.slice(2), 'hex')) // TODO remove redundant, get hash from above
 
         this.transactionSigner.signRawTx(unsignedRawTx, (err, rawTx) => {
           // If given provider send tx to network
