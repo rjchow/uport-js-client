@@ -193,36 +193,38 @@ class UPortMockClient {
         response = this.signer(payload)
 
         if (this.network) {
-          this.verifyJWT(token).then(() => resolve(response)).catch(reject)
+          return this.verifyJWT(params.requestToken).then(() => this.returnResponse(response, token.callbackUrl))
         }
 
-        this.returnResponse(response, token.callbackUrl).then(resolve, reject)
+        return this.returnResponse(response, token.callbackUrl)
 
       } else if (!!uri.match(/:me\?/g)) {
         // A simple request
         response = this.signer({iss: this.address, iat: new Date().getTime(), address: this.address})
-        this.returnResponse(txHash, params.callback_url).then(resolve, reject)
+        return this.returnResponse(txHash, params.callback_url)
 
       } else if (!!uri.match(/:0[xX][0-9a-fA-F]+\?/g)) {
         // Transaction signing request
         const to = uri.match(/0[xX][0-9a-fA-F]+/g)[0]
-        const data = params.bytecode || params.function ? funcToData(params.function) : '0x' //TODO whats the proper null value?
+        const from = this.deviceKeys.address
+        const data = params.bytecode || params.function ?  funcToData(params.function) : '0x' //TODO whats the proper null value?
         const nonce = this.nonce++
-        const value = params.value
-        const gas = params.gas ? params.gas : new BN('43092000') // TODO What to default?
-        const gasPrice = new BN('20000000000')
-        const txObj = {to, value, data, gas, gasPrice, nonce, data}
+        const value = params.value || 0
+        const gas = params.gas ? params.gas : 6000000
+        // TODO good default or opts
+        const gasPrice = 3000000
+        const txObj = {to, value, data, gas, gasPrice, nonce, data, from}
         const tx = new Transaction(txObj)
-        tx.sign(new Buffer(this.privateKey, 'hex'))
+        // TODO add signer specific to our archetecture ie proxy
+        tx.sign(new Buffer(this.deviceKeys.priv.slice(2), 'hex'))
 
         // If given provider send tx to network
         if (this.ethjs) {
           const rawTx = util.bufferToHex(tx.serialize())
-          this.ethjs.sendRawTransaction(rawTx).then(resolve, reject)
+          return this.ethjs.sendRawTransaction(rawTx).then(txHash => this.returnResponse(txHash, params.callback_url)).then(resolve, reject)
         } else {
           const txHash = util.bufferToHex(tx.hash(true))
-          resolve(txHash)
-          this.returnResponse(txHash, params.callback_url).then(resolve, reject)
+          return this.returnResponse(txHash, params.callback_url)
         }
 
       } else if (!!uri.match(/add\?/g)) {
@@ -242,12 +244,11 @@ class UPortMockClient {
           // redundant
           this.credentials[key] ? this.credentials[key].append({jwt, json}) : this.credentials[key] = [{jwt, json}]
         }
-        // TODO what is the response here? is there one, add proper reject failure, or don't reject pass proper response
-
+        // TODO standard response?
       } else {
         // Not a valid request
         reject(new Error('Invalid URI Passed'))
-        //TODO  what is our error returns from mobile? do we do anything? if not this should maybe throw instead of return error?
+        //TODO  standard response?
       }
     })
   }
