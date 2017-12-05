@@ -157,7 +157,22 @@ class UPortMockClient {
     return this.consume(uri)
             .then(this.ethjs.getTransactionReceipt.bind(this.ethjs))
             .then(receipt => {
-              // ...
+              const log = receipt.logs[0]
+              const createEventAbi = IdentityManager.abi.filter(obj => obj.type === 'event' && obj.name ==='LogIdentityCreated')[0]
+              this.id = decodeEvent(createEventAbi, log.data, log.topics).identity
+              const publicProfile = {
+                  '@context': 'http://schema.org',
+                  '@type': 'Person',
+                  "publicKey": this.deviceKeys.pub
+              }
+              return new Promise((resolve, reject) => {
+                this.ipfs.addJSON(publicProfile, (err, result) => {
+                    if (err) reject(new Error(err))
+                    resolve(result)
+                })
+              })
+            }).then(hash => {
+              //..
             })
   }
 
