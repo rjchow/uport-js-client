@@ -9,8 +9,17 @@ const UportLite = require('uport-lite')
 const verifyJWT = require('uport').verifyJWT
 const nets = require('nets')
 
-// Some default configurations
-// Redundant code from uport-connect, can add addtional configs to uport-js instead ()
+const tryRequire = (path) => {
+  try {
+    return require(path)
+  } catch(err) {
+    return null
+  }
+}
+
+const IdentityManagerArtifact = tryRequire('./contracts/IdentityManager.json')
+const RegistryArtifact = tryRequire('./contracts/UportRegistry.json')
+
 const networks = {
   'mainnet':   {  id: '0x1',
                   registry: '0xab5c8051b9a1df1aab0149f8b0630848b7ecabf6',
