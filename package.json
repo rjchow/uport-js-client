@@ -4,10 +4,7 @@
   "description": "Mocks the functionality of the uport mobile client",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "deploy-id": "(cd node_modules/uport-identity && truffle migrate --network ganache) && cp -r node_modules/uport-identity/build/contracts contracts",
-    "deploy-registry": "(cd node_modules/uport-registry && truffle migrate --network ganache --prevAddr none) && cp node_modules/uport-registry/build/contracts/UportRegistry.json contracts/UportRegistry.json",
-    "deploy": "npm run deploy-id && npm run deploy-registry"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
