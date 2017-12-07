@@ -27,8 +27,9 @@ const tryRequire = (path) => {
   }
 }
 
-const IdentityManagerArtifact = tryRequire('./contracts/IdentityManager.json')
-const RegistryArtifact = tryRequire('./contracts/UportRegistry.json')
+const uportIdentity = require('uport-identity')
+const RegistryArtifact = require('uport-registry')
+const IdentityManagerArtifact = uportIdentity.IdentityManager.v1
 
 const networks = {
   'mainnet':   {  id: '0x1',
@@ -49,11 +50,9 @@ const DEFAULTNETWORK = 'rinkeby'
 
 const configNetwork = (net = DEFAULTNETWORK) => {
   if (typeof net === 'object') {
-    ['id', 'rpcUrl'].forEach((key) => {
+    ['id', 'registry', 'rpcUrl'].forEach((key) => {
       if (!net.hasOwnProperty(key)) throw new Error(`Malformed network config object, object must have '${key}' key specified.`)
     })
-    if (!net.registry && RegistryArtifact.networks[net.id])  net.registry = RegistryArtifact.networks[net.id].address
-    if (!net.registry) throw new Error(`Malformed network config object, no registry specified and no registry available in registry contract artifact`)
     return net
   } else if (typeof net === 'string') {
     if (!networks[net]) throw new Error(`Network configuration not available for '${net}'`)
@@ -124,10 +123,14 @@ class UPortMockClient {
 
       this.verifyJWT = (jwt) => verifyJWT({registry: this.registry}, jwt)
 
-      this.provider = config.provider || new HttpProvider(this.network.rpcUrl)
-      this.ethjs = config.provider ? new EthJS(this.provider) : null;
-    }
+      this.provider = config.provider || new HttpProvider(this.network.rpcUrl);
+      this.ethjs = this.provider ? new EthJS(this.provider) : null;
+
+      // TODO how to config this
+      this.registryAddress = this.network.registry
+      this.identityManagerAddress = this.network.identityManager
   }
+}
 
   genKeyPair() {
       const privateKey = SecureRandom.randomBuffer(32)
@@ -162,7 +165,7 @@ class UPortMockClient {
 
   initializeIdentity(){
     if (!this.network) return Promise.reject(new Error('No network configured'))
-    const IdentityManagerAdress = IdentityManagerArtifact.networks[this.network.id].address
+    const IdentityManagerAdress = this.identityManagerAddress
     const IdentityManager = Contract(IdentityManagerArtifact.abi).at(IdentityManagerAdress) // add config for this
     const Registry = Contract(RegistryArtifact.abi).at(this.network.registry)
     if (!this.deviceKeys) this.initKeys()
@@ -172,7 +175,7 @@ class UPortMockClient {
             .then(this.ethjs.getTransactionReceipt.bind(this.ethjs))
             .then(receipt => {
               const log = receipt.logs[0]
-              const createEventAbi = IdentityManager.abi.filter(obj => obj.type === 'event' && obj.name ==='LogIdentityCreated')[0]
+              const createEventAbi = IdentityManager.abi.filter(obj => obj.type === 'event' && obj.name ==='IdentityCreated')[0]
               this.id = decodeEvent(createEventAbi, log.data, log.topics).identity
               this.initTransactionSigner(IdentityManagerAdress)
 
@@ -310,3 +313,5 @@ class UPortMockClient {
     })
   }
 }
+
+module.exports = UPortMockClient
