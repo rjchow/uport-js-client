@@ -129,6 +129,7 @@ class UPortMockClient {
       // TODO how to config this
       this.registryAddress = this.network.registry
       this.identityManagerAddress = this.network.identityManager
+
   }
 }
 
@@ -214,6 +215,15 @@ class UPortMockClient {
     this.info[key] = value
   }
 
+  signRawTx(unsignedRawTx) {
+    return new Promise((resolve, reject) => {
+      this.transactionSigner.signRawTx(unsignedRawTx, (err, rawTx) => {
+        if (err) reject(err)
+        resolve(rawTx)
+      })
+    })
+  }
+
   returnResponse(res, url){
     return new Promise((resolve, reject) => {
       if (this.postRes) {
@@ -234,7 +244,6 @@ class UPortMockClient {
   // consume(uri, actions)   actions = ['accept', 'cancel', etc], returns promise to allow for net req options
   consume(uri, actions) {
     // TODO clean up promis chains
-    return new Promise((resolve, reject) => {
       const params = getUrlParams(uri)
       let response
 
@@ -254,7 +263,6 @@ class UPortMockClient {
         if (this.network) {
           return this.verifyJWT(params.requestToken).then(() => this.returnResponse(response, token.callbackUrl))
         }
-
         return this.returnResponse(response, token.callbackUrl)
 
       } else if (!!uri.match(/:me\?/g)) {
@@ -278,15 +286,17 @@ class UPortMockClient {
         const unsignedRawTx = util.bufferToHex(tx.serialize())
         tx.sign(new Buffer(this.deviceKeys.privateKey.slice(2), 'hex')) // TODO remove redundant, get hash from above
 
-        this.transactionSigner.signRawTx(unsignedRawTx, (err, rawTx) => {
-          // If given provider send tx to network
-          if (this.ethjs) {
-            return this.ethjs.sendRawTransaction(rawTx).then(txHash => this.returnResponse(txHash, params.callback_url)).then(resolve, reject)
-          } else {
-            const txHash = util.bufferToHex(tx.hash(true))
-            return this.returnResponse(txHash, params.callback_url)
-          }
-        })
+        if (this.ethjs) {
+          return this.signRawTx(unsignedRawTx)
+                     .then(rawTx => {
+                       return this.ethjs.sendRawTransaction(rawTx)
+                     }).then(txHash => {
+                       return this.returnResponse(txHash, params.callback_url)
+                     })
+        } else {
+          const txHash = util.bufferToHex(tx.hash(true))
+          return this.returnResponse(txHash, params.callback_url)
+        }
       } else if (!!uri.match(/add\?/g)) {
         // Add attestation request
         const attestations = params.attestations.isArray() ? params.attestations : [params.attestations]
@@ -310,7 +320,6 @@ class UPortMockClient {
         reject(new Error('Invalid URI Passed'))
         //TODO  standard response?
       }
-    })
   }
 }
 
