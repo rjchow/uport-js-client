@@ -22,6 +22,7 @@
     "ipfs-mini": "^1.1.2",
     "jsontokens": "^0.7.6",
     "secure-random": "^1.1.1",
+    "truffle-contract": "^3.0.1",
     "truffle-hdwallet-provider": "0.0.3",
     "uport": "^0.6.0",
     "uport-identity": "^2.0.0-beta",
