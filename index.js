@@ -91,17 +91,10 @@ class UPortMockClient {
     // Handle this differently once there is a test and full client
     this.postRes = config.postRes || false
 
-    // TODO move init state elsewhere
     // {key: value, ...}
-    this.info  = initState.info || { name: 'John Ether'  }
+    this.info  = initState.info || { }
     // this.credentials = {address: [{jwt: ..., json: ....}, ...], ...}
-    this.credentials = initState.credentials || { phone: [{ jwt: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NksifQ.eyJzdWIiOiIweDExMjIzMyIsImNsYWltIjp7ImVtYWlsIjoiYmluZ2JhbmdidW5nQGVtYWlsLmNvbSJ9LCJleHAiOjE0ODUzMjExMzQ5OTYsImlzcyI6IjB4MDAxMTIyIiwiaWF0IjoxNDg1MzIxMTMzOTk2fQ.-mEzVMPYnzqFhOr0O7fs71-dWAacnllVyOdWQY0zh2ZdIt7-30IYTewds4tGlkLmMky-Y1ZjRmIsxmM7xvAgxg',
-                                    json: { "sub": '0x3b2631d8e15b145fd2bf99fc5f98346aecdc394c',
-                                            "claim": { 'phone': '123-456-7891' },
-                                            "exp": 1485321134996,
-                                            "iss": '0x5b0abbd37bcebb98a390445b540115f3c819a3b9',
-                                            "iat": 1485321133996
-                                           }}]}
+    this.credentials = initState.credentials || { }
 
      this.network = config.network ? configNetwork(config.network) : null  // have some default connect/setup testrpc
 
