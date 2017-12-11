@@ -85,12 +85,40 @@ const  funcToData = (funcStr) => {
 const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(key))
 const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((key) => credentials[key].map((cred) => cred.jwt)))
 
+const SimpleResponseHandler = (res, url) => new Promise((resolve, reject) => resolve(res))
+
+const HTTPResponseHandler = (res, url) => new Promise((resolve, reject) => {
+    nets({
+      body: res,
+      url: url,
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    }, (err, resp, body) => {
+      if (err) reject(err)
+      resolve(res)
+    })
+  })
+
+const responseHandlers = {
+  'simple' : SimpleResponseHandler,
+  'http'   : HTTPResponseHandler
+}
+
+const configResponseHandler = (responseHandler = 'simple') => {
+  if ( typeof(responseHandler) === 'function') return responseHandler
+  if ( typeof(responseHandler) === 'string') {
+    if (!responseHandlers[responseHandler]) throw new Error(`Response handler configuration not available for '${net}'`)
+    return responseHandlers[responseHandler]
+  }
+  throw new Error(`Not a valid responseHandler`)
+}
+
+
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
     this.nonce = config.nonce || 0
     // Handle this differently once there is a test and full client
-    this.postRes = config.postRes || false
-
+    this.responseHandler = configResponseHandler(config.responseHandler)
     // {key: value, ...}
     this.info  = initState.info || { }
     // this.credentials = {address: [{jwt: ..., json: ....}, ...], ...}
@@ -217,23 +245,6 @@ class UPortMockClient {
     })
   }
 
-  returnResponse(res, url){
-    return new Promise((resolve, reject) => {
-      if (this.postRes) {
-        nets({
-          body: res,
-          url: url,
-          method: "POST",
-          headers: { "Content-Type": "application/json" }
-        }, (err, resp, body) => {
-          if (err) reject(err)
-          resolve(res)
-        })
-      }
-      resolve(res)
-    })
-  }
-
   // consume(uri, actions)   actions = ['accept', 'cancel', etc], returns promise to allow for net req options
   consume(uri, actions) {
     // TODO clean up promis chains
@@ -254,14 +265,14 @@ class UPortMockClient {
         response = this.signer(payload)
 
         if (this.network) {
-          return this.verifyJWT(params.requestToken).then(() => this.returnResponse(response, token.callbackUrl))
+          return this.verifyJWT(params.requestToken).then(() => this.responseHandler(response, token.callbackUrl))
         }
-        return this.returnResponse(response, token.callbackUrl)
+        return this.responseHandler(response, token.callbackUrl)
 
       } else if (!!uri.match(/:me\?/g)) {
         // A simple request
         response = this.signer({iss: this.address, iat: new Date().getTime(), address: this.address})
-        return this.returnResponse(txHash, params.callback_url)
+        return this.responseHandler(txHash, params.callback_url)
 
       } else if (!!uri.match(/:0[xX][0-9a-fA-F]+\?/g)) {
         // Transaction signing request
@@ -284,11 +295,11 @@ class UPortMockClient {
                      .then(rawTx => {
                        return this.ethjs.sendRawTransaction(rawTx)
                      }).then(txHash => {
-                       return this.returnResponse(txHash, params.callback_url)
+                       return this.responseHandler(txHash, params.callback_url)
                      })
         } else {
           const txHash = util.bufferToHex(tx.hash(true))
-          return this.returnResponse(txHash, params.callback_url)
+          return this.responseHandler(txHash, params.callback_url)
         }
       } else if (!!uri.match(/add\?/g)) {
         // Add attestation request
