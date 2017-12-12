@@ -85,23 +85,48 @@ const  funcToData = (funcStr) => {
 const intersection = (obj, arr) => Object.keys(obj).filter(key => arr.includes(key))
 const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((key) => credentials[key].map((cred) => cred.jwt)))
 
+const SimpleResponseHandler = (res, url) => new Promise((resolve, reject) => resolve(res))
+
+const HTTPResponseHandler = (res, url) => new Promise((resolve, reject) => {
+    nets({
+      body: res,
+      url: url,
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    }, (err, resp, body) => {
+      if (err) reject(err)
+      resolve(res)
+    })
+  })
+
+const responseHandlers = {
+  'simple' : SimpleResponseHandler,
+  'http'   : HTTPResponseHandler
+}
+
+const configResponseHandler = (responseHandler = 'simple') => {
+  if ( typeof(responseHandler) === 'function') return responseHandler
+  if ( typeof(responseHandler) === 'string') {
+    if (!responseHandlers[responseHandler]) throw new Error(`Response handler configuration not available for '${net}'`)
+    return responseHandlers[responseHandler]
+  }
+  throw new Error(`Not a valid responseHandler`)
+}
+
+const isShareRequest = (uri) => !!uri.match(/:me\?.*requestToken/g)
+const isSimpleRequest = (uri) => !!uri.match(/:me\?/g)
+const isTransactionRequest = (uri) => !!uri.match(/:0[xX][0-9a-fA-F]+\?/g)
+const isAddAttestationRequest = (uri) => !!uri.match(/add\?/g)
+
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
     this.nonce = config.nonce || 0
     // Handle this differently once there is a test and full client
-    this.postRes = config.postRes || false
-
-    // TODO move init state elsewhere
+    this.responseHandler = configResponseHandler(config.responseHandler)
     // {key: value, ...}
-    this.info  = initState.info || { name: 'John Ether'  }
+    this.info  = initState.info || { }
     // this.credentials = {address: [{jwt: ..., json: ....}, ...], ...}
-    this.credentials = initState.credentials || { phone: [{ jwt: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NksifQ.eyJzdWIiOiIweDExMjIzMyIsImNsYWltIjp7ImVtYWlsIjoiYmluZ2JhbmdidW5nQGVtYWlsLmNvbSJ9LCJleHAiOjE0ODUzMjExMzQ5OTYsImlzcyI6IjB4MDAxMTIyIiwiaWF0IjoxNDg1MzIxMTMzOTk2fQ.-mEzVMPYnzqFhOr0O7fs71-dWAacnllVyOdWQY0zh2ZdIt7-30IYTewds4tGlkLmMky-Y1ZjRmIsxmM7xvAgxg',
-                                    json: { "sub": '0x3b2631d8e15b145fd2bf99fc5f98346aecdc394c',
-                                            "claim": { 'phone': '123-456-7891' },
-                                            "exp": 1485321134996,
-                                            "iss": '0x5b0abbd37bcebb98a390445b540115f3c819a3b9',
-                                            "iat": 1485321133996
-                                           }}]}
+    this.credentials = initState.credentials || { }
 
      this.network = config.network ? configNetwork(config.network) : null  // have some default connect/setup testrpc
 
@@ -224,102 +249,88 @@ class UPortMockClient {
     })
   }
 
-  returnResponse(res, url){
-    return new Promise((resolve, reject) => {
-      if (this.postRes) {
-        nets({
-          body: res,
-          url: url,
-          method: "POST",
-          headers: { "Content-Type": "application/json" }
-        }, (err, resp, body) => {
-          if (err) reject(err)
-          resolve(res)
-        })
-      }
-      resolve(res)
-    })
+  shareRequestHandler(uri) {
+    const params = getUrlParams(uri)
+    // A shareReq in a token
+    const token = decodeToken(params.requestToken).payload
+    const verified = filterCredentials(this.credentials, intersection(this.credentials, token.requested) )
+    const req = params.requestToken
+    const info = intersection(this.info, token.requested)
+                 .reduce((infoReq, key) => {
+                   infoReq[key] = this.info[key]
+                   return infoReq
+                  }, {})
+    const payload = {...info, iss: this.address, iat: new Date().getTime(), verified, type: 'shareReq', req}
+    const response = this.signer(payload)
+
+    if (this.network) {
+      return this.verifyJWT(params.requestToken).then(() => this.responseHandler(response, token.callbackUrl))
+    }
+    // TODO how to return response
+    // return this.responseHandler(response, token.callbackUrl)
   }
 
-  // consume(uri, actions)   actions = ['accept', 'cancel', etc], returns promise to allow for net req options
-  consume(uri, actions) {
-    // TODO clean up promis chains
-      const params = getUrlParams(uri)
-      let response
+  simpleRequestHandler(uri) {
+    // A simple request
+    const params = getUrlParams(uri)
+    const response = this.signer({iss: this.address, iat: new Date().getTime(), address: this.address})
+    return this.responseHandler(response, params.callback_url)
+  }
 
-      if (!!uri.match(/:me\?.*requestToken/g)) {
-        // A shareReq in a token
-        const token = decodeToken(params.requestToken).payload
-        const verified = filterCredentials(this.credentials, intersection(this.credentials, token.requested) )
-        const req = params.requestToken
-        const info = intersection(this.info, token.requested)
-                     .reduce((infoReq, key) => {
-                       infoReq[key] = this.info[key]
-                       return infoReq
-                      }, {})
-        const payload = {...info, iss: this.address, iat: new Date().getTime(), verified, type: 'shareReq', req}
-        response = this.signer(payload)
+  transactionRequestHandler(uri) {
+    const params = getUrlParams(uri)
+    const to = uri.match(/0[xX][0-9a-fA-F]+/g)[0]
+    const from = this.deviceKeys.address
+    const data = params.bytecode || params.function ?  funcToData(params.function) : '0x' //TODO whats the proper null value?
+    const nonce = this.nonce++
+    const value = params.value || 0
+    const gas = params.gas ? params.gas : 6000000
+    // TODO good default or opts
+    const gasPrice = 3000000
+    const txObj = {to, value, data, gas, gasPrice, nonce, data, from}
+    const tx = new Transaction(txObj)
 
-        if (this.network) {
-          return this.verifyJWT(params.requestToken).then(() => this.returnResponse(response, token.callbackUrl))
-        }
-        return this.returnResponse(response, token.callbackUrl)
+    const unsignedRawTx = util.bufferToHex(tx.serialize())
+    tx.sign(new Buffer(this.deviceKeys.privateKey.slice(2), 'hex')) // TODO remove redundant, get hash from above
 
-      } else if (!!uri.match(/:me\?/g)) {
-        // A simple request
-        response = this.signer({iss: this.address, iat: new Date().getTime(), address: this.address})
-        return this.returnResponse(txHash, params.callback_url)
+    if (this.ethjs) {
+      return this.signRawTx(unsignedRawTx)
+                 .then(rawTx => {
+                   return this.ethjs.sendRawTransaction(rawTx)
+                 }).then(txHash => {
+                   return this.responseHandler(txHash, params.callback_url)
+                 })
+    } else {
+      const txHash = util.bufferToHex(tx.hash(true))
+      return this.responseHandler(txHash, params.callback_url)
+    }
+  }
 
-      } else if (!!uri.match(/:0[xX][0-9a-fA-F]+\?/g)) {
-        // Transaction signing request
-        const to = uri.match(/0[xX][0-9a-fA-F]+/g)[0]
-        const from = this.deviceKeys.address
-        const data = params.bytecode || params.function ?  funcToData(params.function) : '0x' //TODO whats the proper null value?
-        const nonce = this.nonce++
-        const value = params.value || 0
-        const gas = params.gas ? params.gas : 6000000
-        // TODO good default or opts
-        const gasPrice = 3000000
-        const txObj = {to, value, data, gas, gasPrice, nonce, data, from}
-        const tx = new Transaction(txObj)
+  addAttestationRequestHandler(uri) {
+    const params = getUrlParams(uri)
+    const attestations = params.attestations.isArray() ? params.attestations : [params.attestations]
 
-        const unsignedRawTx = util.bufferToHex(tx.serialize())
-        tx.sign(new Buffer(this.deviceKeys.privateKey.slice(2), 'hex')) // TODO remove redundant, get hash from above
+    for (jwt in attestations) {
+      const json = decodeToken(jwt).payload
+      const key = Object.keys(json.claim)[0]
 
-        if (this.ethjs) {
-          return this.signRawTx(unsignedRawTx)
-                     .then(rawTx => {
-                       return this.ethjs.sendRawTransaction(rawTx)
-                     }).then(txHash => {
-                       return this.returnResponse(txHash, params.callback_url)
-                     })
-        } else {
-          const txHash = util.bufferToHex(tx.hash(true))
-          return this.returnResponse(txHash, params.callback_url)
-        }
-      } else if (!!uri.match(/add\?/g)) {
-        // Add attestation request
-        const attestations = params.attestations.isArray() ? params.attestations : [params.attestations]
-
-        for (jwt in attestations) {
-          const json = decodeToken(jwt).payload
-          const key = Object.keys(json.claim)[0]
-
-          if (this.network) {
-            this.verifyJWT(jwt).then(() => {
-              this.credentials[key] ? this.credentials[key].append({jwt, json}) : this.credentials[key] = [{jwt, json}]
-            }).catch(reject)
-          }
-
-          // redundant
+      if (this.network) {
+        this.verifyJWT(jwt).then(() => {
           this.credentials[key] ? this.credentials[key].append({jwt, json}) : this.credentials[key] = [{jwt, json}]
-        }
-        // TODO standard response?
-      } else {
-        // Not a valid request
-        reject(new Error('Invalid URI Passed'))
-        //TODO  standard response?
+        }).catch(reject)
       }
+      // redundant
+      this.credentials[key] ? this.credentials[key].append({jwt, json}) : this.credentials[key] = [{jwt, json}]
+    }
+    // TODO standard response?
+  }
+
+  consume(uri) {
+      if (isShareRequest) return this.shareRequestHandler(uri)
+      if (isSimpleRequest) return this.simpleRequestHandler(uri)
+      if (isTransactionRequest) return this.transactionRequestHandler(uri)
+      if (isAddAttestationRequest) return this.addAttestationRequestHandler(uri)
+      return Promise.reject(new Error('Invalid URI Passed'))
   }
 }
 
