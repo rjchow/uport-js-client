@@ -18,6 +18,7 @@ const IPFS = require('ipfs-mini');
 const EthSigner = require('eth-signer')
 const SimpleSigner = EthSigner.signers.SimpleSigner
 const IMProxySigner = EthSigner.signers.IMProxySigner
+const urlDecode = require('urldecode')
 
 const tryRequire = (path) => {
   try {
@@ -87,17 +88,39 @@ const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((k
 
 const SimpleResponseHandler = (res, url) => new Promise((resolve, reject) => resolve(res))
 
-const HTTPResponseHandler = (res, url) => new Promise((resolve, reject) => {
-    nets({
-      body: res,
-      url: url,
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    }, (err, resp, body) => {
-      if (err) reject(err)
-      resolve(res)
-    })
+const HTTPResponseHandler = (res, url) => {
+    // Chasqui specific
+    if (!!url.match(/chasqui.uport.me/g)) {
+      return new Promise((resolve, reject) => {
+        nets({
+          uri: urlDecode(url),
+          json: true,
+          method: 'GET',
+          withCredentials: false,
+          rejectUnauthorized: false
+        }, (err, resp, body) => {
+          if (err) reject(err)
+          post(res, url).then(resolve, reject)
+        })
+      })
+    }
+    return post(res, url)
+  }
+
+const post = (res, url) => new Promise((resolve, reject) => {
+  nets({
+    body: JSON.stringify({access_token: res}),
+    url: urlDecode(url),
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8'
+    },
+  }, (err, resp, body) => {
+    if (err) reject(err)
+    resolve(resp)
   })
+})
 
 const responseHandlers = {
   'simple' : SimpleResponseHandler,
@@ -326,10 +349,10 @@ class UPortMockClient {
   }
 
   consume(uri) {
-      if (isShareRequest) return this.shareRequestHandler(uri)
-      if (isSimpleRequest) return this.simpleRequestHandler(uri)
-      if (isTransactionRequest) return this.transactionRequestHandler(uri)
-      if (isAddAttestationRequest) return this.addAttestationRequestHandler(uri)
+      if (isShareRequest(uri)) return this.shareRequestHandler(uri)
+      if (isSimpleRequest(uri)) return this.simpleRequestHandler(uri)
+      if (isTransactionRequest(uri)) return this.transactionRequestHandler(uri)
+      if (isAddAttestationRequest(uri)) return this.addAttestationRequestHandler(uri)
       return Promise.reject(new Error('Invalid URI Passed'))
   }
 }
