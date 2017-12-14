@@ -310,7 +310,7 @@ class UPortMockClient {
     const gas = params.gas ? params.gas : 6000000
     // TODO good default or opts
     const gasPrice = 3000000
-    const txObj = {to, value, data, gas, gasPrice, nonce, data, from}
+    const txObj = {to, value: new BN(value), data, gas, gasPrice, nonce, from}
     const tx = new Transaction(txObj)
 
     const unsignedRawTx = util.bufferToHex(tx.serialize())
