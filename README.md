@@ -66,6 +66,12 @@ For a full working example of what is described above see the `example.js` file.
 
 If running this client on a test/local/private network or any network where we don't have our contract infrastructure deployed you can easily deploy your own [instances of our contracts](https://github.com/uport-project/uport-identity).
 
+Either use our cli-tool to run the deployment or use the javascript object.
+
+```bash    
+uportclient deploy --rpcUrl [optional] --from [optional]
+```
+
 ```javascript     
 import deploy from './deploy.js'
 
