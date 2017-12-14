@@ -60,7 +60,7 @@ If you want to initialize a client with an existing identity, identity related s
 ```
 ### Example
 
-For a full working example of what is described above see the `example.js` file.
+For a full working example of what is described above see the `examples/clientExample.js` file.
 
 ### Contracts
 
@@ -176,3 +176,7 @@ Once the object is instantiated you can pass in request URIs just as you would t
     // ...
   })
 ```
+
+### Example
+
+For a working example of what is described above see the `examples/mockClientExample.js` file.
