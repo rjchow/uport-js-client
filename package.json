@@ -8,8 +8,11 @@
     "build-dist": "./node_modules/.bin/webpack --config webpack.config.js",
     "build-es5": "./node_modules/.bin/babel index.js -d lib --presets stage-2"
   },
-  "author": "",
-  "license": "ISC",
+  "bin": {
+    "uportclient": "./bin/uportclient.js"
+  },
+  "author": "Zach Ferland <zach.ferland@consensys.net> (http://consensys.net/)",
+  "license": "Apache2",
   "dependencies": {
     "eth-signer": "^0.3.3",
     "ethereumjs-testrpc": "^6.0.3",
