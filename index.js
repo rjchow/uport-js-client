@@ -1,7 +1,6 @@
 // Normalize library use, which dependencies/utils do we prefer
 const { decodeToken, createUnsignedToken, SECP256K1Client, TokenSigner } = require('jsontokens')
 const Transaction = require('ethereumjs-tx')
-const util = require('ethereumjs-util')
 const BN = util.BN
 const txutils = require('eth-signer/dist/eth-signer-simple.js').txutils
 const EthJS = require('ethjs-query');
@@ -16,9 +15,11 @@ const decodeEvent = require('ethjs-abi').decodeEvent
 const SecureRandom = require('secure-random')
 const IPFS = require('ipfs-mini');
 const EthSigner = require('eth-signer')
-const SimpleSigner = EthSigner.signers.SimpleSigner
 const IMProxySigner = EthSigner.signers.IMProxySigner
 const urlDecode = require('urldecode')
+const secp256k1 = ethutil.secp256k1;
+
+
 
 const tryRequire = (path) => {
   try {
@@ -141,6 +142,11 @@ const isSimpleRequest = (uri) => !!uri.match(/:me\?/g)
 const isTransactionRequest = (uri) => !!uri.match(/:0[xX][0-9a-fA-F]+\?/g)
 const isAddAttestationRequest = (uri) => !!uri.match(/add\?/g)
 
+const signer = (privKey) => (hash) =>  {
+  const sig = secp256k1.sign(hash, new Buffer(ethutil.stripHexPrefix(privKey), 'hex'))
+  return {r: sig.signature.slice(0, 32), s: sig.signature.slice(32, 64) , v: sig.recovery }
+}
+
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
     this.nonce = config.nonce || 0
@@ -204,6 +210,7 @@ class UPortMockClient {
   }
 
   initSimpleSigner() {
+    //  TODO consumes signer now, allow config of signer, or to be passed in opts
      this.simpleSigner = new SimpleSigner({privateKey: this.deviceKeys.privateKey, publicKey: this.deviceKeys.publicKey, address: this.deviceKeys.address })
      this.transactionSigner = this.simpleSigner  //TODO Make less confusing, uses simpler signer until identity created then uses identity specific signer
   }
@@ -313,7 +320,7 @@ class UPortMockClient {
     const txObj = {to, value: new BN(value), data, gas, gasPrice, nonce, from}
     const tx = new Transaction(txObj)
 
-    const unsignedRawTx = util.bufferToHex(tx.serialize())
+    const unsignedRawTx = ethutil.bufferToHex(tx.serialize())
     tx.sign(new Buffer(this.deviceKeys.privateKey.slice(2), 'hex')) // TODO remove redundant, get hash from above
 
     if (this.ethjs) {
