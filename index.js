@@ -1,7 +1,10 @@
 // Normalize library use, which dependencies/utils do we prefer
 const { decodeToken, createUnsignedToken, SECP256K1Client, TokenSigner } = require('jsontokens')
+const derToJose = require('jsontokens/lib/cryptoClients/ecdsaSigFormatter.js').derToJose
+const createHash = SECP256K1Client.createHash
 const Transaction = require('ethereumjs-tx')
-const BN = util.BN
+const ethutil = require('ethereumjs-util')
+const BN = ethutil.BN
 const txutils = require('eth-signer/dist/eth-signer-simple.js').txutils
 const EthJS = require('ethjs-query');
 const HttpProvider = require('ethjs-provider-http');
@@ -9,7 +12,6 @@ const UportLite = require('uport-lite')
 const verifyJWT = require('uport').JWT.verifyJWT
 const nets = require('nets')
 const Contract = require('uport').Contract
-const ethutil = require('ethereumjs-util')
 const base58 = require('bs58')
 const decodeEvent = require('ethjs-abi').decodeEvent
 const SecureRandom = require('secure-random')
@@ -18,6 +20,8 @@ const EthSigner = require('eth-signer')
 const IMProxySigner = EthSigner.signers.IMProxySigner
 const urlDecode = require('urldecode')
 const secp256k1 = ethutil.secp256k1;
+const ECSignature = require('elliptic/lib/elliptic/ec/signature.js');
+const base64url = require('base64url')
 
 
 
@@ -143,7 +147,7 @@ const isTransactionRequest = (uri) => !!uri.match(/:0[xX][0-9a-fA-F]+\?/g)
 const isAddAttestationRequest = (uri) => !!uri.match(/add\?/g)
 
 
-// TODO consume both hex or buffer
+// TODO consume both hex or buffer, add details about use, offer default hash func
 const signer = (privKey) => (hash) =>  {
   const sig = secp256k1.sign(hash, new Buffer(ethutil.stripHexPrefix(privKey), 'hex'))
   return {r: sig.signature.slice(0, 32), s: sig.signature.slice(32, 64) , v: sig.recovery }
@@ -161,7 +165,7 @@ class SimpleSigner {
   }
 
   signRawTx(rawTx, callback) {
-    var rawTx = util.stripHexPrefix(rawTx);
+    var rawTx = ethutil.stripHexPrefix(rawTx);
     const txCopy = new Transaction(new Buffer(rawTx, 'hex'));
     const txHash = txCopy.hash(false)
     const signature = this.sign(txHash)
@@ -171,6 +175,20 @@ class SimpleSigner {
     callback(null, txCopy.serialize().toString('hex'));
   }
 }
+
+// Create a jwt signer using the base signer
+const JWTSigner = (signer) => (jwt) => {
+  const sign = signer
+  const header = {typ: 'JWT', alg: 'ES256K'}
+  const signingInput = [base64url.encode(JSON.stringify(header)), base64url.encode(JSON.stringify(jwt))].join('.')
+  const hash = createHash(signingInput)
+  const signature = sign(hash)
+  // TODO add consistent use of signing libs, instead of a varying ones
+  const derSignature = ECSignature({r: signature.r, s: signature.s, recoveryparam: signature.v}).toDER()
+  const joseSig = derToJose(new Buffer(derSignature, 'ES256'))
+  return [signingInput, joseSig].join('.')
+}
+
 
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
@@ -230,8 +248,7 @@ class UPortMockClient {
   }
 
   initTokenSigner() {
-     const tokenSigner = new TokenSigner('ES256k', this.deviceKeys.privateKey)
-     this.signer = tokenSigner.sign.bind(tokenSigner)
+    this.jwtSigner = JWTSigner(signer(this.deviceKeys.privateKey))
   }
 
   initSimpleSigner() {
@@ -316,7 +333,7 @@ class UPortMockClient {
                    return infoReq
                   }, {})
     const payload = {...info, iss: this.address, iat: new Date().getTime(), verified, type: 'shareReq', req}
-    const response = this.signer(payload)
+    const response = this.jwtSigner(payload)
 
     if (this.network) {
       return this.verifyJWT(params.requestToken).then(() => this.responseHandler(response, token.callbackUrl))
@@ -328,7 +345,7 @@ class UPortMockClient {
   simpleRequestHandler(uri) {
     // A simple request
     const params = getUrlParams(uri)
-    const response = this.signer({iss: this.address, iat: new Date().getTime(), address: this.address})
+    const response = this.jwtSigner({iss: this.address, iat: new Date().getTime(), address: this.address})
     return this.responseHandler(response, params.callback_url)
   }
 
