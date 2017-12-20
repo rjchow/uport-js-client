@@ -142,9 +142,34 @@ const isSimpleRequest = (uri) => !!uri.match(/:me\?/g)
 const isTransactionRequest = (uri) => !!uri.match(/:0[xX][0-9a-fA-F]+\?/g)
 const isAddAttestationRequest = (uri) => !!uri.match(/add\?/g)
 
+
+// TODO consume both hex or buffer
 const signer = (privKey) => (hash) =>  {
   const sig = secp256k1.sign(hash, new Buffer(ethutil.stripHexPrefix(privKey), 'hex'))
   return {r: sig.signature.slice(0, 32), s: sig.signature.slice(32, 64) , v: sig.recovery }
+}
+
+// Implements simple signer interface to used with our other eth-signers
+class SimpleSigner {
+  constructor(signer, address) {
+    this.sign = signer
+    this.address = address
+  }
+
+  getAddress(){
+    return this.address
+  }
+
+  signRawTx(rawTx, callback) {
+    var rawTx = util.stripHexPrefix(rawTx);
+    const txCopy = new Transaction(new Buffer(rawTx, 'hex'));
+    const txHash = txCopy.hash(false)
+    const signature = this.sign(txHash)
+    txCopy.r = signature.r
+    txCopy.s = signature.s
+    txCopy.v = signature.v + 27
+    callback(null, txCopy.serialize().toString('hex'));
+  }
 }
 
 class UPortMockClient {
@@ -211,7 +236,7 @@ class UPortMockClient {
 
   initSimpleSigner() {
     //  TODO consumes signer now, allow config of signer, or to be passed in opts
-     this.simpleSigner = new SimpleSigner({privateKey: this.deviceKeys.privateKey, publicKey: this.deviceKeys.publicKey, address: this.deviceKeys.address })
+     this.simpleSigner = new SimpleSigner(signer(this.deviceKeys.privateKey), this.deviceKeys.address)
      this.transactionSigner = this.simpleSigner  //TODO Make less confusing, uses simpler signer until identity created then uses identity specific signer
   }
 
