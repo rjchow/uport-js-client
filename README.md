@@ -1,8 +1,8 @@
 ## uPort JS Client
 
-uPort JS Client is a minimal javascript implementation of a uPort client in our protocol. Similarly to the uPort mobile app it acts as a data container of identity related information and manages a set of keys. You can use it to initialize new identities on any network. You can then interact with the client through the same interface as the mobile app by passing supported requests as properly formatted URL strings. It comes with additional helper and utility functions related to our protocol to make experimenting with new features and use cases easy. It is highly configurable, allowing it to be used for anything from an actual client in varying contexts and networks all the way to a test client which mocks varying subsets of functionality.
+uPort JS Client is a minimal javascript implementation of a uPort client in our protocol. Similarly to the uPort mobile app it acts as a data container of identity related information and manages a set of keys. You can use it to initialize new identities on any network. You can then interact with the client through the same interface as the mobile app by passing supported requests as properly formatted URL strings. It comes with additional helper and utility functions related to our protocol to make experimenting with new features and use cases easy. It is highly configurable, allowing it to be used for anything from an actual client in varying contexts and networks, all the way to a test client which mocks varying subsets of functionality.
 
-This is sill in development and still lacks many features, tooling and stability. It does not provide any security related guarantees. Its primary use is for rapid prototyping, experimenting with both new feature and new use cases, and for testing across the uPort protocol stack. Future development of this will focus on those uses, while building supporting tooling and reusable pieces of code.
+This is sill in development and still lacks many features, tooling and stability. It does not provide any security related guarantees. Its primary use is for rapid prototyping, experimenting with both new features and new use cases, and for testing across the uPort protocol stack. Future development of this will focus on those uses, while building supporting tooling and reusable pieces of code.
 
 ## Client
 
@@ -60,7 +60,7 @@ If you want to initialize a client with an existing identity, identity related s
 ```
 ### Example
 
-For a full working example of what is described above see the `examples/clientExample.js` file.
+For a full working example of what is described above see the `examples/clientExample.js` file. If actually running the example (`node examples/clientExample.js`) make sure the network is properly configured for the network you are running it on. By default it can be quickly tried with ganache/testrpc.
 
 ### Contracts
 
