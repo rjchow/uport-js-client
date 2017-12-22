@@ -289,8 +289,8 @@ class UPortMockClient {
     if (this.network) {
       return this.verifyJWT(params.requestToken).then(() => this.responseHandler(response, token.callbackUrl))
     }
-    // TODO how to return response
-    // return this.responseHandler(response, token.callbackUrl)
+
+    return this.responseHandler(response, token.callbackUrl)
   }
 
   simpleRequestHandler(uri) {

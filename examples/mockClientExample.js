@@ -11,8 +11,11 @@ const createuPortMockClient = () => {
 }
 
 const mockClient = createuPortMockClient()
-const uri = 'me.uport:0x829BD824B016326A401d083B33D092293333A830?value=100'
-// const uri = 'me.uport:me?requestToken=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NksifQ.eyJyZXF1ZXN0ZWQiOlsibmFtZSIsInBob25lIl0sInR5cGUiOiJzaGFyZVJlcSIsImlzcyI6IjB4NWIwYWJiZDM3YmNlYmI5OGEzOTA0NDViNTQwMTE1ZjNjODE5YTNiOSIsImlhdCI6MTQ4NTMyMTEzMzk5Nn0.ZvPhqYLJFa3wdETUcmWGk7Gm4MBNZdfe0eksqRcefwCYaMC96JzWUN0Ot42Pn1SX9M5CMQpkLksC5MQC2mYwgg'
+
+// A transaction request
+// const uri = 'me.uport:0x829BD824B016326A401d083B33D092293333A830?value=100'
+// A share request
+const uri = 'me.uport:me?requestToken=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NksifQ.eyJyZXF1ZXN0ZWQiOlsibmFtZSIsInBob25lIl0sInR5cGUiOiJzaGFyZVJlcSIsImlzcyI6IjB4NWIwYWJiZDM3YmNlYmI5OGEzOTA0NDViNTQwMTE1ZjNjODE5YTNiOSIsImlhdCI6MTQ4NTMyMTEzMzk5Nn0.ZvPhqYLJFa3wdETUcmWGk7Gm4MBNZdfe0eksqRcefwCYaMC96JzWUN0Ot42Pn1SX9M5CMQpkLksC5MQC2mYwgg'
 
 // TODO will add functions to generate test data for clients
 
