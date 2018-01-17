@@ -19,6 +19,7 @@ const EthSigner = require('eth-signer')
 const SimpleSigner = EthSigner.signers.SimpleSigner
 const IMProxySigner = EthSigner.signers.IMProxySigner
 const urlDecode = require('urldecode')
+const fs = require('fs')
 
 const tryRequire = (path) => {
   try {
@@ -212,7 +213,26 @@ class UPortMockClient {
      this.transactionSigner = new IMProxySigner(this.id, this.simpleSigner, IdentityManagerAdress)
   }
 
-  initializeIdentity(){
+  appDDO(name, description, url, imgPath) {
+      // TODO consume both path and buffer, error handle invalid path
+      fs.readFile(imgPath, (err, data) => {
+        if (err) reject(new Error(err))
+        this.ipfs.add(data, (err, result) => {
+          if (err) reject(new Error(err))
+          const imgHash = result
+          const DDO =  { name: name,
+                         '@type': 'App',
+                         description: description,
+                         url: url,
+                         image: { contentUrl: `/ipfs/${imgHash}` }
+                       }
+          resolve(DDO)
+        })
+      })
+    })
+  }
+
+  initializeIdentity(initDdo){
     if (!this.network) return Promise.reject(new Error('No network configured'))
     const IdentityManagerAdress = this.identityManagerAddress
     const IdentityManager = Contract(IdentityManagerArtifact.abi).at(IdentityManagerAdress) // add config for this
@@ -227,14 +247,15 @@ class UPortMockClient {
               const createEventAbi = IdentityManager.abi.filter(obj => obj.type === 'event' && obj.name ==='IdentityCreated')[0]
               this.id = decodeEvent(createEventAbi, log.data, log.topics).identity
               this.initTransactionSigner(IdentityManagerAdress)
-
-              const publicProfile = {
+              // TODO add address?
+              const baseDdo = {
                   '@context': 'http://schema.org',
                   '@type': 'Person',
                   "publicKey": this.deviceKeys.publicKey
               }
+              const Ddo = Object.assign(baseDdo, initDdo)
               return new Promise((resolve, reject) => {
-                this.ipfs.addJSON(publicProfile, (err, result) => {
+                this.ipfs.addJSON(Ddo, (err, result) => {
                     if (err) reject(new Error(err))
                     resolve(result)
                 })

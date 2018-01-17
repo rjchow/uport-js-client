@@ -27,6 +27,11 @@ const createuPortClient = () => {
     })
     .then(txHash => {
       console.log('Funded device key')
+    //  Following commented out section can be used to create additional data for an app identity
+    //   return uportClient.appDDO('myapp', 'is cool app', 'dapp.com', './myimage.png')
+    // }).then(ddo => {
+    //   console.log('ddo created')
+    //   return uportClient.initializeIdentity(ddo)
       return uportClient.initializeIdentity()
     }).then(res => {
       console.log('Identity Created')
