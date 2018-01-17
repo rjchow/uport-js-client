@@ -215,6 +215,7 @@ class UPortMockClient {
 
   appDDO(name, description, url, imgPath) {
       // TODO consume both path and buffer, error handle invalid path
+    return new Promise((resolve, reject) => {
       fs.readFile(imgPath, (err, data) => {
         if (err) reject(new Error(err))
         this.ipfs.add(data, (err, result) => {
@@ -236,7 +237,6 @@ class UPortMockClient {
     if (!this.network) return Promise.reject(new Error('No network configured'))
     const IdentityManagerAdress = this.identityManagerAddress
     const IdentityManager = Contract(IdentityManagerArtifact.abi).at(IdentityManagerAdress) // add config for this
-    const Registry = Contract(RegistryArtifact.abi).at(this.network.registry)
     if (!this.deviceKeys) this.initKeys()
     const uri = IdentityManager.createIdentity(this.deviceKeys.address, this.recoveryKeys.address)
 
@@ -253,22 +253,9 @@ class UPortMockClient {
                   '@type': 'Person',
                   "publicKey": this.deviceKeys.publicKey
               }
-              const Ddo = Object.assign(baseDdo, initDdo)
-              return new Promise((resolve, reject) => {
-                this.ipfs.addJSON(Ddo, (err, result) => {
-                    if (err) reject(new Error(err))
-                    resolve(result)
-                })
-              })
-            }).then(hash => {
-              const hexhash = new Buffer(base58.decode(hash)).toString('hex')
-              // removes Qm from ipfs hash, which specifies length and hash
-              const hashArg = `0x${hexhash.slice(4)}`
-              const key = 'uPortProfileIPFS1220'
-              return Registry.set(key, this.id, hexhash)
-            })
-            .then(this.consume.bind(this))
-            .then(this.ethjs.getTransactionReceipt.bind(this.ethjs))
+              const ddo = Object.assign(baseDdo, initDdo)
+              return this.writeDDO(ddo)
+            }).then(this.ethjs.getTransactionReceipt.bind(this.ethjs))
             .then(receipt => {
               // .. receipt
               return
@@ -282,6 +269,26 @@ class UPortMockClient {
 
   addProfileKey(key, value ) {
     this.info[key] = value
+  }
+
+  writeDDO(newDdo) {
+   const Registry = Contract(RegistryArtifact.abi).at(this.network.registry)
+   return this.registry(this.id).then(ddo => {
+      ddo = Object.assign(ddo || {}, newDdo)
+      return new Promise((resolve, reject) => {
+        this.ipfs.addJSON(ddo, (err, result) => {
+            if (err) reject(new Error(err))
+            resolve(result)
+        })
+      })
+    }).then(hash => {
+      const hexhash = new Buffer(base58.decode(hash)).toString('hex')
+      // removes Qm from ipfs hash, which specifies length and hash
+      const hashArg = `0x${hexhash.slice(4)}`
+      const key = 'uPortProfileIPFS1220'
+      return Registry.set(key, this.id, hexhash)
+    })
+    .then(this.consume.bind(this))
   }
 
   signRawTx(unsignedRawTx) {
