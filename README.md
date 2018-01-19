@@ -9,7 +9,7 @@ This is sill in development and still lacks many features, tooling and stability
 To use a full uPort client pass in all network configs, these can easily be configured for a test network as well.
 
 ```javascript
-import UPortClient from 'uport-js-client'
+import { UPortClient } from 'uport-js-client'
 
 // Example configuration with local chain (ganache/testrpc) and local ipfs node
 const config = {
@@ -61,6 +61,21 @@ If you want to initialize a client with an existing identity, identity related s
 ### Example
 
 For a full working example of what is described above see the `examples/clientExample.js` file. If actually running the example (`node examples/clientExample.js`) make sure the network is properly configured for the network you are running it on. By default it can be quickly tried with ganache/testrpc.
+
+### Storage
+
+To persist an instance of a client you can serialize the object and then write it to any storage layer. You can later deserialized the object to use it again.
+
+```javascript           
+import { serialize, deserialize, UPortClient } from 'uport-js-client'
+
+const uportClient = ...
+
+const uportClientString = serialize(uportClient)
+
+const uportClientAgain = deserialize(uportClientString)
+
+```
 
 ### Contracts
 
