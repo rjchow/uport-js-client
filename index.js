@@ -89,6 +89,34 @@ const filterCredentials = (credentials, keys) => [].concat.apply([], keys.map((k
 
 const SimpleResponseHandler = (res, url) => new Promise((resolve, reject) => resolve(res))
 
+const serialize = (uportClient) => {
+  // TODO covers most cases, but also deal with passed in config functions
+  const jsonClientState = {
+    id: uportClient.id,
+    network: uportClient.network,
+    nonce: uportClient.nonce,
+    info: uportClient.info,
+    credentials: uportClient.credentials,
+    ipfsConfig: uportClient.ipfsUrl,
+    deviceKeys: uportClient.deviceKeys,
+    recoveryKeys: uportClient.recoveryKeys
+  }
+  return JSON.stringify(jsonClientState)
+}
+
+const deserialize = (str) => {
+  const jsonClientState = JSON.parse(str)
+  const uportClient = new UPortMockClient(jsonClientState)
+  // Some of uport client could be refactored to handle this through configs, but won't change this interface once changed
+  uportClient.deviceKeys = jsonClientState.deviceKeys
+  uportClient.recoveryKeys = jsonClientState.recoveryKeys
+  uportClient.id = jsonClientState.id
+  uportClient.initTokenSigner()
+  uportClient.initSimpleSigner()
+  uportClient.initTransactionSigner(uportClient.identityManagerAddress)
+  return uportClient
+}
+
 const HTTPResponseHandler = (res, url) => {
     // Chasqui specific
     if (!!url.match(/chasqui.uport.me/g)) {
@@ -144,6 +172,7 @@ const isAddAttestationRequest = (uri) => !!uri.match(/add\?/g)
 
 class UPortMockClient {
   constructor(config = {}, initState = {}) {
+    // TODO handle nonce better
     this.nonce = config.nonce || 0
     // Handle this differently once there is a test and full client
     this.responseHandler = configResponseHandler(config.responseHandler)
@@ -385,4 +414,4 @@ class UPortMockClient {
   }
 }
 
-module.exports = UPortMockClient
+module.exports = { UPortMockClient, serialize, deserialize }
