@@ -1,4 +1,4 @@
-const UPortClient = require('../index.js').UPortMockClient
+const UPortClient = require('../index.js').UPortClient
 const deploy = require('../deploy.js')
 const EthJS = require('ethjs-query');
 const HttpProvider = require('ethjs-provider-http');

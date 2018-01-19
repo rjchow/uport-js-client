@@ -106,7 +106,7 @@ const serialize = (uportClient) => {
 
 const deserialize = (str) => {
   const jsonClientState = JSON.parse(str)
-  const uportClient = new UPortMockClient(jsonClientState)
+  const uportClient = new UPortClient(jsonClientState)
   // Some of uport client could be refactored to handle this through configs, but won't change this interface once changed
   uportClient.deviceKeys = jsonClientState.deviceKeys
   uportClient.recoveryKeys = jsonClientState.recoveryKeys
@@ -170,7 +170,7 @@ const isSimpleRequest = (uri) => !!uri.match(/:me\?/g)
 const isTransactionRequest = (uri) => !!uri.match(/:0[xX][0-9a-fA-F]+\?/g)
 const isAddAttestationRequest = (uri) => !!uri.match(/add\?/g)
 
-class UPortMockClient {
+class UPortClient {
   constructor(config = {}, initState = {}) {
     // TODO handle nonce better
     this.nonce = config.nonce || 0
@@ -414,4 +414,4 @@ class UPortMockClient {
   }
 }
 
-module.exports = { UPortMockClient, serialize, deserialize }
+module.exports = { UPortClient, serialize, deserialize }
