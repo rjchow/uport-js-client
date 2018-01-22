@@ -1,7 +1,7 @@
 {
-  "name": "uport-mock-client",
+  "name": "uport-client",
   "version": "0.1.0",
-  "description": "Mocks the functionality of the uport mobile client",
+  "description": "A minimal javascript implementation of a uPort client",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -9,7 +9,7 @@
     "build-es5": "./node_modules/.bin/babel index.js -d lib --presets stage-2"
   },
   "bin": {
-    "uportclient": "./bin/uportclient.js"
+    "uport": "./bin/uport.js"
   },
   "author": "Zach Ferland <zach.ferland@consensys.net> (http://consensys.net/)",
   "license": "Apache2",
