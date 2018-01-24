@@ -33,6 +33,8 @@ const uportIdentity = require('uport-identity')
 const RegistryArtifact = require('uport-registry')
 const IdentityManagerArtifact = uportIdentity.IdentityManager.v1
 
+// TODO need to import identity manager Adresses
+
 const networks = {
   'mainnet':   {  id: '0x1',
                   registry: '0xab5c8051b9a1df1aab0149f8b0630848b7ecabf6',
@@ -62,6 +64,16 @@ const configNetwork = (net = DEFAULTNETWORK) => {
   }
 
   throw new Error(`Network configuration object or network string required`)
+}
+
+const genKeyPair = () =>  {
+    const privateKey = SecureRandom.randomBuffer(32)
+    const publicKey = ethutil.privateToPublic(privateKey)
+    return {
+      privateKey: `0x${privateKey.toString('hex')}`,
+      publicKey: `0x04${publicKey.toString('hex')}`,
+      address: `0x${ethutil.pubToAddress(publicKey).toString('hex')}`
+    }
 }
 
 const getUrlParams = (url) => (
@@ -181,6 +193,9 @@ class UPortClient {
     // this.credentials = {address: [{jwt: ..., json: ....}, ...], ...}
     this.credentials = initState.credentials || { }
 
+    this.deviceKeys = config.deviceKeys
+    this.recoveryKeys = config.recoveryKeys
+
      this.network = config.network ? configNetwork(config.network) : null  // have some default connect/setup testrpc
 
      if (this.network) {
@@ -211,19 +226,9 @@ class UPortClient {
   }
 }
 
-  genKeyPair() {
-      const privateKey = SecureRandom.randomBuffer(32)
-      const publicKey = ethutil.privateToPublic(privateKey)
-      return {
-        privateKey: `0x${privateKey.toString('hex')}`,
-        publicKey: `0x04${publicKey.toString('hex')}`,
-        address: `0x${ethutil.pubToAddress(publicKey).toString('hex')}`
-      }
-  }
-
   initKeys() {
-    this.deviceKeys = this.genKeyPair()
-    this.recoveryKeys = this.genKeyPair()
+    if (!this.deviceKeys) this.deviceKeys =  genKeyPair()
+    if (!this.recoveryKeys) this.recoveryKeys = genKeyPair()
     this.initTokenSigner()
     this.initSimpleSigner()
   }
@@ -266,7 +271,7 @@ class UPortClient {
     if (!this.network) return Promise.reject(new Error('No network configured'))
     const IdentityManagerAdress = this.identityManagerAddress
     const IdentityManager = Contract(IdentityManagerArtifact.abi).at(IdentityManagerAdress) // add config for this
-    if (!this.deviceKeys) this.initKeys()
+    this.initKeys()
     const uri = IdentityManager.createIdentity(this.deviceKeys.address, this.recoveryKeys.address)
 
     return this.consume(uri)
@@ -414,4 +419,4 @@ class UPortClient {
   }
 }
 
-module.exports = { UPortClient, serialize, deserialize }
+module.exports = { UPortClient, serialize, deserialize, networks, genKeyPair }
