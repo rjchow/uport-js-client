@@ -4,12 +4,24 @@ const registryArtifact = require('uport-registry')
 const identityManagerArtifact = uportIdentity.IdentityManager.v1
 const EthJS = require('ethjs-query');
 const HttpProvider = require('ethjs-provider-http');
+const SignerProvider = require('ethjs-provider-signer');
+const sign = require('ethjs-signer').sign;
 
 const Registry = Contract(registryArtifact)
 const IdentityManager = Contract(identityManagerArtifact)
 
-const deploy = (network, {from, gas, gasPrice, IdentityManagerArgs = {}} = {}) => {
-  const provider = network || typeof(network) === 'string'  ? new HttpProvider(network) : network
+const deploy = (network, {from, gas, gasPrice, IdentityManagerArgs = {}} = {}, privKey) => {
+
+  let provider
+
+  if (privKey) {
+    provider = new SignerProvider(network, {
+      signTransaction: (rawTx, cb) => cb(null, sign(rawTx, privKey))
+    });
+  } else {
+    provider = network || typeof(network) === 'string'  ? new HttpProvider(network) : network
+  }
+
   Registry.setProvider(provider)
   IdentityManager.setProvider(provider)
   const eth = new EthJS(new HttpProvider(network))
