@@ -20,6 +20,7 @@ const SimpleSigner = EthSigner.signers.SimpleSigner
 const IMProxySigner = EthSigner.signers.IMProxySigner
 const urlDecode = require('urldecode')
 const fs = require('fs')
+const deploy = require('./deploy.js')
 
 const tryRequire = (path) => {
   try {
@@ -419,4 +420,4 @@ class UPortClient {
   }
 }
 
-module.exports = { UPortClient, serialize, deserialize, networks, genKeyPair }
+module.exports = { UPortClient, serialize, deserialize, networks, genKeyPair, deploy }

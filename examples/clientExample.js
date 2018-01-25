@@ -1,5 +1,5 @@
 const UPortClient = require('../index.js').UPortClient
-const deploy = require('../deploy.js')
+const deploy = require('../index.js').deploy
 const EthJS = require('ethjs-query');
 const HttpProvider = require('ethjs-provider-http');
 const { decodeToken } = require('jsontokens')
