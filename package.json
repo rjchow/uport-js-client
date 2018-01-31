@@ -1,7 +1,7 @@
 {
-  "name": "uport-mock-client",
+  "name": "uport-client",
   "version": "0.1.0",
-  "description": "Mocks the functionality of the uport mobile client",
+  "description": "A minimal javascript implementation of a uPort client",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
