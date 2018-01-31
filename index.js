@@ -306,9 +306,13 @@ class UPortClient {
     this.info[key] = value
   }
 
+  getDDO() {
+    const Registry = Contract(RegistryArtifact.abi).at(this.network.registry)
+    return this.registry(this.id)
+  }
+
   writeDDO(newDdo) {
-   const Registry = Contract(RegistryArtifact.abi).at(this.network.registry)
-   return this.registry(this.id).then(ddo => {
+   return this.getDDO().then(ddo => {
       ddo = Object.assign(ddo || {}, newDdo)
       return new Promise((resolve, reject) => {
         this.ipfs.addJSON(ddo, (err, result) => {
