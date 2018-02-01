@@ -21,6 +21,7 @@ const IMProxySigner = EthSigner.signers.IMProxySigner
 const urlDecode = require('urldecode')
 const fs = require('fs')
 const deploy = require('./deploy.js')
+const mnid = require('mnid')
 
 const tryRequire = (path) => {
   try {
@@ -112,7 +113,8 @@ const serialize = (uportClient) => {
     credentials: uportClient.credentials,
     ipfsConfig: uportClient.ipfsUrl,
     deviceKeys: uportClient.deviceKeys,
-    recoveryKeys: uportClient.recoveryKeys
+    recoveryKeys: uportClient.recoveryKeys,
+    mnid: uportClient.mnid
   }
   return JSON.stringify(jsonClientState)
 }
@@ -124,6 +126,7 @@ const deserialize = (str) => {
   uportClient.deviceKeys = jsonClientState.deviceKeys
   uportClient.recoveryKeys = jsonClientState.recoveryKeys
   uportClient.id = jsonClientState.id
+  uportClient.mnid = jsonClientState.mnid
   uportClient.initTokenSigner()
   uportClient.initSimpleSigner()
   uportClient.initTransactionSigner(uportClient.identityManagerAddress)
@@ -281,6 +284,7 @@ class UPortClient {
               const log = receipt.logs[0]
               const createEventAbi = IdentityManager.abi.filter(obj => obj.type === 'event' && obj.name ==='IdentityCreated')[0]
               this.id = decodeEvent(createEventAbi, log.data, log.topics).identity
+              this.mnid = mnid.encode({ network: this.network.id, address: this.id })
               this.initTransactionSigner(IdentityManagerAdress)
               // TODO add address?
               const baseDdo = {

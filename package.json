@@ -22,6 +22,7 @@
     "ethjs-signer": "^0.1.1",
     "ipfs-mini": "^1.1.2",
     "jsontokens": "^0.7.6",
+    "mnid": "^0.1.1",
     "secure-random": "^1.1.1",
     "truffle-contract": "^3.0.1",
     "truffle-hdwallet-provider": "0.0.3",
