@@ -311,7 +311,7 @@ class UPortClient {
   }
 
   getDDO() {
-    return this.registry(this.id)
+    return this.registry(this.mnid)
   }
 
   writeDDO(newDdo) {
