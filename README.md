@@ -14,7 +14,7 @@ import { UPortClient } from 'uport-js-client'
 // Example configuration with local chain (ganache/testrpc) and local ipfs node
 const config = {
         network: {
-          id: '5777',
+          id: '0x1691',
           rpcUrl: 'http://127.0.0.1:7545',
           registry:  '0x.....',
           identityManager: '0x.....'
