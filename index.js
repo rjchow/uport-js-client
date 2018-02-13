@@ -329,7 +329,7 @@ class UPortClient {
       // removes Qm from ipfs hash, which specifies length and hash
       const hashArg = `0x${hexhash.slice(4)}`
       const key = 'uPortProfileIPFS1220'
-      return Registry.set(key, this.id, hexhash)
+      return Registry.set(key, this.id, hashArg)
     })
     .then(this.consume.bind(this))
   }
