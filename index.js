@@ -254,20 +254,23 @@ class UPortClient {
   appDDO(name, description, url, imgPath) {
       // TODO consume both path and buffer, error handle invalid path
     return new Promise((resolve, reject) => {
-      fs.readFile(imgPath, (err, data) => {
-        if (err) reject(new Error(err))
-        this.ipfs.add(data, (err, result) => {
+      const DDO =  { '@type': 'App' }
+      if (name) DDO.name = name
+      if (description) DDO.description = description
+      if (url) DDO.url = url
+      if (imgPath) {
+        fs.readFile(imgPath, (err, data) => {
           if (err) reject(new Error(err))
-          const imgHash = result
-          const DDO =  { name: name,
-                         '@type': 'App',
-                         description: description,
-                         url: url,
-                         image: { contentUrl: `/ipfs/${imgHash}` }
-                       }
-          resolve(DDO)
+          this.ipfs.add(data, (err, result) => {
+            if (err) reject(new Error(err))
+            const imgHash = result
+            DDO.image = { contentUrl: `/ipfs/${imgHash}` }
+            resolve(DDO)
+          })
         })
-      })
+      } else {
+        resolve(DDO)
+      }
     })
   }
 
