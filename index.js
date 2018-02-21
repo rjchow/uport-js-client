@@ -172,6 +172,12 @@ const responseHandlers = {
   'http'   : HTTPResponseHandler
 }
 
+const prommiseTimeOut = (msec) => {
+  return new Promise((resolve, reject) => {
+    setTimeout(resolve, msec)
+  })
+}
+
 const configResponseHandler = (responseHandler = 'simple') => {
   if ( typeof(responseHandler) === 'function') return responseHandler
   if ( typeof(responseHandler) === 'string') {
@@ -274,6 +280,20 @@ class UPortClient {
     })
   }
 
+  getReceipt(txHash) {
+    let receipt
+    return this.ethjs.getTransactionReceipt(txHash).then(res => {
+      if (res !== null) {
+        receipt = res
+        return
+      }
+      return prommiseTimeOut(1000)
+    }).then(() => {
+      if (receipt) return receipt
+      return this.getReceipt(txHash)
+    })
+  }
+
   initializeIdentity(initDdo){
     if (!this.network) return Promise.reject(new Error('No network configured'))
     const IdentityManagerAdress = this.identityManagerAddress
@@ -282,7 +302,7 @@ class UPortClient {
     const uri = IdentityManager.createIdentity(this.deviceKeys.address, this.recoveryKeys.address)
 
     return this.consume(uri)
-            .then(this.ethjs.getTransactionReceipt.bind(this.ethjs))
+            .then(this.getReceipt.bind(this))
             .then(receipt => {
               const log = receipt.logs[0]
               const createEventAbi = IdentityManager.abi.filter(obj => obj.type === 'event' && obj.name ==='IdentityCreated')[0]
